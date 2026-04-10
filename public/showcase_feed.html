@@ -1,0 +1,1204 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 導入成果動態牆</title>
+    <!-- 引入 Tailwind CSS CDN 以維持現代化設計 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .transition-all {
+            transition-duration: 300ms;
+        }
+
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        /* 隱藏捲動軸但保留捲動能力 (用於留言區) */
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        /* Modal 彈出與遮罩動畫 */
+        #uploadModal {
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        #uploadModal.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        #modalContent {
+            transform: scale(0.95) translateY(20px);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        #uploadModal.active #modalContent {
+            transform: scale(1) translateY(0);
+        }
+
+        /* 圖片容器維持 1:1 或 4:5 比例，仿 IG */
+        .img-container {
+            position: relative;
+            width: 100%;
+            padding-bottom: 100%;
+            /* 1:1 Aspect Ratio */
+            background-color: #f3f4f6;
+            overflow: hidden;
+        }
+
+        .img-container img {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* Custom Scrollbar for code block */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #1f2937;
+            border-radius: 8px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #4b5563;
+            border-radius: 8px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #6b7280;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-50 min-h-screen text-gray-800 font-sans pb-20">
+
+    <!-- 頂部導覽列 (仿 IG 風格) -->
+    <header class="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
+        <div class="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
+            <h1 class="text-xl font-extrabold italic tracking-tight flex items-center gap-2">
+                <span
+                    class="bg-gradient-to-tr from-pink-500 via-red-500 to-yellow-500 text-transparent bg-clip-text">WorkflowGram</span>
+            </h1>
+        </div>
+    </header>
+
+    <!-- 主內容區：動態牆網格 -->
+    <main class="max-w-5xl mx-auto px-4 pt-8">
+
+        <!-- 頁籤切換 -->
+        <div class="flex border-b border-gray-200 mb-6">
+            <button id="tab-feed" class="py-3 px-6 font-bold text-gray-900 border-b-2 border-gray-900 transition-colors"
+                onclick="switchTab('feed')">
+                團隊成果展示區
+            </button>
+            <button id="tab-prompts" class="py-3 px-6 font-bold text-gray-400 hover:text-gray-700 transition-colors"
+                onclick="switchTab('prompts')">
+                PROMPT 資訊共享區
+            </button>
+        </div>
+
+        <!-- 第一區：團隊成果展示區 -->
+        <div id="section-feed">
+            <!-- 頂部操作區 (Action Bar) 與 PROMPT 一致 -->
+            <div
+                class="flex flex-col md:flex-row gap-2 mb-6 bg-white p-2 rounded-xl border border-gray-100 shadow-[0_2px_10px_-3px_rgba(0,0,0,0.05)] items-center">
+                <button onclick="openModal()"
+                    class="flex items-center justify-center bg-[#1b1b24] hover:bg-black text-white px-5 py-2.5 rounded-lg font-bold transition-colors w-full md:w-auto transform active:scale-95 text-sm whitespace-nowrap">
+                    <span class="text-indigo-400 mr-2 font-black text-lg leading-none">+</span> 分享成果
+                </button>
+
+                <div class="flex flex-1 gap-2 w-full">
+                    <input type="text" id="feedSearchInput" placeholder="搜尋展示內容..."
+                        class="flex-1 rounded-lg border border-gray-200 px-4 py-2.5 text-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-300 outline-none transition-all placeholder-gray-400">
+                    <select id="feedTagFilter"
+                        class="rounded-lg border border-gray-200 px-4 py-2.5 text-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-300 outline-none bg-white transition-all cursor-pointer min-w-[120px] text-gray-700">
+                        <option value="all">所有類別</option>
+                        <option value="hr">🏢 人資部</option>
+                        <option value="rd">💻 研發部</option>
+                        <option value="marketing">📈 行銷部</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- 卡片網格 (RWD: 手機1欄, 平板2欄, 電腦3欄) -->
+            <div id="feedContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
+                <!-- 卡片由 JS 動態生成 -->
+            </div>
+        </div>
+
+        <!-- 第二區：PROMPT 資訊共享區 -->
+        <div id="section-prompts" class="hidden">
+            <!-- 頂部操作區 (Action Bar) -->
+            <div
+                class="flex flex-col md:flex-row gap-2 mb-6 bg-white p-2 rounded-xl border border-gray-100 shadow-[0_2px_10px_-3px_rgba(0,0,0,0.05)] items-center">
+                <button onclick="openPromptUploadModal()"
+                    class="flex items-center justify-center bg-[#1b1b24] hover:bg-black text-white px-5 py-2.5 rounded-lg font-bold transition-colors w-full md:w-auto transform active:scale-95 text-sm whitespace-nowrap">
+                    <span class="text-purple-300 mr-2 font-black text-lg leading-none">+</span> 上傳 PROMPT
+                </button>
+
+                <div class="flex flex-1 gap-2 w-full">
+                    <input type="text" id="promptSearchInput" placeholder="搜尋 PROMPT..."
+                        class="flex-1 rounded-lg border border-gray-200 px-4 py-2.5 text-sm focus:border-blue-400 focus:ring-1 focus:ring-blue-300 outline-none transition-all placeholder-gray-400"
+                        oninput="filterPrompts()">
+                    <select id="promptTagFilter"
+                        class="rounded-lg border border-gray-200 px-4 py-2.5 text-sm focus:border-blue-400 focus:ring-1 focus:ring-blue-300 outline-none bg-white transition-all cursor-pointer min-w-[120px] text-gray-700"
+                        onchange="filterPrompts()">
+                        <option value="all">所有標籤</option>
+                        <option value="official">⭐ 官方精選</option>
+                        <option value="community">👥 社群貢獻</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- 提示詞展示網格 -->
+            <div id="promptContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- PROMPT 卡片由 JS 動態生成 -->
+            </div>
+        </div>
+
+    </main>
+
+    <!-- ================= 發布成果彈出視窗 (Modal) ================= -->
+    <div id="uploadModal" class="fixed inset-0 z-50 flex items-center justify-center px-4">
+        <!-- 半透明背景遮罩 -->
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="closeModal()"></div>
+
+        <!-- Modal 視窗主體 -->
+        <div id="modalContent"
+            class="bg-white rounded-2xl shadow-2xl w-full max-w-lg relative z-10 flex flex-col max-h-[90vh] overflow-hidden">
+
+            <!-- Modal 標題 -->
+            <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                <h3 class="font-bold text-lg text-gray-900">建立新分享</h3>
+                <button onclick="closeModal()"
+                    class="text-gray-400 hover:text-gray-700 transition-colors p-1 rounded-full hover:bg-gray-200">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12">
+                        </path>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Modal 內容與表單 (可捲動) -->
+            <form id="postForm" class="overflow-y-auto p-6 space-y-6">
+
+                <!-- 圖片上傳區 (實作上傳預覽) -->
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">上傳預覽圖 <span
+                            class="text-red-500">*</span></label>
+                    
+                    <input type="file" id="realImageUpload" accept="image/*" class="hidden" onchange="window.handleImageSelect(event)">
+                    
+                    <div id="imageUploadContainer" onclick="document.getElementById('realImageUpload').click()"
+                        class="border-2 border-dashed border-gray-300 rounded-xl bg-gray-50 p-6 flex flex-col items-center justify-center text-center hover:bg-gray-100 transition-colors cursor-pointer group overflow-hidden relative">
+                        <div
+                            class="w-12 h-12 bg-white rounded-full shadow-sm flex items-center justify-center mb-3 group-hover:scale-110 transition-transform text-blue-500 relative z-10">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z">
+                                </path>
+                            </svg>
+                        </div>
+                        <span class="text-sm font-bold text-gray-600 relative z-10">點擊選擇照片</span>
+                        <span class="text-xs text-gray-400 mt-1 relative z-10">支援 JPG, PNG 格式</span>
+                    </div>
+                </div>
+
+                <!-- 欄位區 -->
+                <div class="space-y-4">
+                    <div>
+                        <input type="text" id="postTitle" required placeholder="工作流名稱 (例如：自動會議總結系統)"
+                            class="w-full rounded-lg border-gray-300 bg-gray-50 px-4 py-3 text-sm font-bold text-gray-900 border focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-200 outline-none transition-all">
+                    </div>
+
+                    <div>
+                        <textarea id="postDesc" required rows="2" placeholder="撰寫功能說明... (它解決了什麼問題？)"
+                            class="w-full rounded-lg border-gray-300 bg-gray-50 px-4 py-3 text-sm text-gray-900 border focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-200 outline-none resize-none transition-all"></textarea>
+                    </div>
+
+                    <div>
+                        <textarea id="postResult" required rows="2" placeholder="達成效果... (例如：節省了 30% 人力)"
+                            class="w-full rounded-lg border-gray-300 bg-gray-50 px-4 py-3 text-sm text-gray-900 border focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-200 outline-none resize-none transition-all"></textarea>
+                    </div>
+                </div>
+
+                <!-- 按鈕區 -->
+                <button type="submit" id="submitPostBtn"
+                    class="w-full py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 transition-all active:scale-[0.98]">
+                    分享發布
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ================= PROMPT 上傳彈出視窗 (Modal) ================= -->
+    <div id="promptUploadModal"
+        class="fixed inset-0 z-50 flex items-center justify-center px-4 opacity-0 pointer-events-none transition-opacity duration-300">
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="closePromptUploadModal()"></div>
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg relative z-10 flex flex-col max-h-[90vh] overflow-hidden transform scale-95 transition-transform duration-300"
+            id="promptUploadContent">
+            <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                <h3 class="font-bold text-lg text-gray-900">上傳我的 PROMPT</h3>
+                <button onclick="closePromptUploadModal()"
+                    class="text-gray-400 hover:text-gray-700 transition-colors p-1 rounded-full hover:bg-gray-200">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12">
+                        </path>
+                    </svg>
+                </button>
+            </div>
+            <div
+                class="p-4 bg-blue-50 text-blue-700 text-sm font-medium border-b border-blue-100 flex items-start gap-2">
+                <svg class="w-5 h-5 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <span>您上傳的內容將作為全新資料發布，不會影響現有的 PROMPT。</span>
+            </div>
+            <form id="promptUploadForm" class="overflow-y-auto p-6 space-y-4">
+                <div>
+                    <input type="text" id="newPromptTitle" required placeholder="PROMPT 名稱"
+                        class="w-full rounded-lg bg-gray-50 px-4 py-3 text-sm font-bold border border-gray-300 focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-200 outline-none transition-all">
+                </div>
+                <div>
+                    <input type="text" id="newPromptDesc" required placeholder="適用情境說明"
+                        class="w-full rounded-lg bg-gray-50 px-4 py-3 text-sm border border-gray-300 focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-200 outline-none transition-all">
+                </div>
+                <div>
+                    <textarea id="newPromptContent" required rows="4" placeholder="請在此輸入 PROMPT 內容..."
+                        class="w-full rounded-lg bg-gray-50 px-4 py-3 text-sm border border-gray-300 focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-200 outline-none resize-none transition-all"></textarea>
+                </div>
+                <div>
+                    <textarea id="newPromptDesign" rows="2" placeholder="設計說明 (選填)"
+                        class="w-full rounded-lg bg-gray-50 px-4 py-3 text-sm border border-gray-300 focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-200 outline-none resize-none transition-all"></textarea>
+                </div>
+                <button type="submit" id="submitNewPromptBtn"
+                    class="w-full py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 transition-all active:scale-[0.98]">確認發布</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ================= PROMPT 詳細資訊視圖 (Detail Modal) ================= -->
+    <div id="promptDetailModal"
+        class="fixed inset-0 z-50 flex items-center justify-center px-4 opacity-0 pointer-events-none transition-opacity duration-300">
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="closePromptDetailModal()"></div>
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl relative z-10 flex flex-col max-h-[90vh] overflow-hidden transform scale-95 transition-transform duration-300"
+            id="promptDetailContent">
+            <div class="px-6 py-5 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                <div class="flex items-center gap-3">
+                    <h3 id="detailTitle" class="font-bold text-xl text-gray-900 leading-tight"></h3>
+                    <span id="detailBadge"
+                        class="text-xs px-2.5 py-1 rounded-full font-bold whitespace-nowrap hidden sm:inline-block"></span>
+                </div>
+                <button onclick="closePromptDetailModal()"
+                    class="text-gray-400 hover:text-gray-700 transition-colors p-1.5 rounded-full hover:bg-gray-200">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12">
+                        </path>
+                    </svg>
+                </button>
+            </div>
+            <div class="overflow-y-auto p-6 space-y-6">
+                <div class="text-sm text-gray-700 leading-relaxed bg-gray-50 p-4 rounded-xl border border-gray-100"
+                    id="detailDesc"></div>
+
+                <div class="relative bg-[#1e1e1e] rounded-xl p-5 border border-gray-800 shadow-inner group">
+                    <div
+                        class="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                        <button onclick="copyDetailPrompt()" id="detailCopyBtn"
+                            class="bg-gray-700 hover:bg-gray-600 text-white text-xs px-3 py-1.5 rounded-md flex items-center gap-1.5 transition-colors border border-gray-600 shadow-sm">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z">
+                                </path>
+                            </svg>
+                            <span id="detailCopyText">一鍵複製</span>
+                        </button>
+                    </div>
+                    <!-- Badge for mobile -->
+                    <span id="detailBadgeMobile"
+                        class="sm:hidden text-xs px-2 py-0.5 rounded-full font-bold bg-gray-700 text-gray-200 mb-2 inline-block"></span>
+                    <pre class="text-gray-300 text-sm font-mono whitespace-pre-wrap mt-2 max-h-[40vh] overflow-y-auto custom-scrollbar leading-relaxed"
+                        id="detailContentBlock"></pre>
+                </div>
+
+                <div id="designSection" class="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                    <button onclick="toggleDesign()"
+                        class="w-full bg-white px-5 py-3.5 flex justify-between items-center hover:bg-gray-50 transition-colors focus:outline-none">
+                        <span class="font-bold text-sm text-gray-800 flex items-center gap-2">
+                            <svg class="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z">
+                                </path>
+                            </svg>
+                            設計與邏輯說明
+                        </span>
+                        <svg id="designToggleIcon"
+                            class="w-5 h-5 text-gray-400 transform transition-transform duration-300" fill="none"
+                            stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7">
+                            </path>
+                        </svg>
+                    </button>
+                    <div id="designContent"
+                        class="hidden p-5 text-sm text-gray-600 bg-gray-50 border-t border-gray-100 leading-relaxed">
+                        <!-- 設計說明內容 -->
+                    </div>
+                </div>
+
+                <!-- 版本更新紀錄區塊 -->
+                <div id="versionsSection"
+                    class="border border-indigo-100 rounded-xl overflow-hidden shadow-sm bg-white mt-6">
+                    <div class="px-5 py-4 border-b border-indigo-100 flex justify-between items-center bg-indigo-50/50">
+                        <h4 class="font-bold text-sm text-indigo-900 flex items-center gap-2">
+                            <svg class="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            版本更新紀錄
+                        </h4>
+                        <button onclick="toggleUpdateForm()"
+                            class="text-xs font-bold text-indigo-700 bg-indigo-100 hover:bg-indigo-200 px-3 py-1.5 rounded-lg transition-colors">
+                            + 新增版本
+                        </button>
+                    </div>
+
+                    <!-- 歷史版本列表 -->
+                    <div id="versionsList" class="divide-y divide-gray-100">
+                        <!-- 動態生成版本沿革 -->
+                    </div>
+
+                    <!-- 新增版本表單 (預設隱藏) -->
+                    <form id="updateVersionForm" class="hidden p-5 bg-gray-50 border-t border-gray-100 space-y-4">
+                        <div class="text-sm font-bold text-gray-700 mb-2">發布新版本</div>
+                        <div>
+                            <input type="text" id="updateDesc" required placeholder="版本更新說明 (例如：優化了語氣、修正了錯字)"
+                                class="w-full rounded-lg bg-white px-4 py-2 text-sm border border-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition-all">
+                        </div>
+                        <div>
+                            <textarea id="updateContent" required rows="3" placeholder="請貼上新版 PROMPT 內容..."
+                                class="w-full rounded-lg bg-white px-4 py-2 text-sm border border-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none resize-none transition-all"></textarea>
+                        </div>
+                        <div class="flex gap-2 justify-end pt-2">
+                            <button type="button" onclick="toggleUpdateForm()"
+                                class="px-4 py-2 text-sm font-bold text-gray-600 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors">取消</button>
+                            <button type="submit" id="submitUpdateBtn"
+                                class="px-4 py-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-md transition-all active:scale-95">確認更新</button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- 留言與討論區塊 -->
+                <div id="promptCommentsSection"
+                    class="border border-gray-200 rounded-xl overflow-hidden shadow-sm bg-white mt-6">
+                    <div class="px-5 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                        <h4 class="font-bold text-sm text-gray-900 flex items-center gap-2">
+                            <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z">
+                                </path>
+                            </svg>
+                            討論與建議
+                        </h4>
+                    </div>
+
+                    <!-- 歷史留言列表 -->
+                    <div id="promptCommentsList" class="divide-y divide-gray-100 max-h-48 overflow-y-auto">
+                        <!-- 動態生成留言 -->
+                    </div>
+
+                    <!-- 新增留言輸入框 -->
+                    <div class="px-4 py-3 border-t border-gray-100 flex items-center bg-gray-50">
+                        <div
+                            class="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs mr-2 shrink-0">
+                            😊</div>
+                        <input type="text" id="promptCommentInput" placeholder="留言分享您的建議或優化想法..."
+                            class="flex-1 bg-transparent text-sm border-none focus:ring-0 outline-none placeholder-gray-400"
+                            onkeypress="handlePromptCommentEnter(event)">
+                        <button onclick="addPromptComment()"
+                            class="text-blue-500 font-bold text-sm opacity-50 hover:opacity-100 transition-opacity whitespace-nowrap ml-2">發布</button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+
+    <!-- 腳本邏輯 -->
+    <script>
+        // ==== 模擬資料 (Mock Data) ====
+        const mockPosts = [
+            {
+                id: 3,
+                author: "Sales_Team (範例)",
+                avatar: "📈",
+                title: "客戶信件自動草稿回覆",
+                image: "https://images.unsplash.com/photo-1552664730-d307ca884978?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=800&q=80",
+                desc: "利用 Gmail Webhook 串接 n8n，當收到特定客戶信件時，自動草擬符合品牌語氣的感謝信或報價說明。",
+                result: "✉️ 確保 24 小時內必定有初版回覆，客戶滿意度 +15%。",
+                likes: 42,
+                isLiked: false,
+                comments: [
+                    { user: "Support_Leo", text: "請問這個有串接公司的 DB 拿歷史報價嗎？" },
+                    { user: "Sales_Team", text: "@Support_Leo 下一版會加入這個功能！" }
+                ],
+                timeAgo: "1 天前"
+            }
+        ];
+
+        // 隨機圖片庫 (供使用者新增貼文時假裝上傳用)
+        
+        window.uploadedImageURL = null;
+        window.handleImageSelect = function(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    window.uploadedImageURL = e.target.result;
+                    const container = document.getElementById('imageUploadContainer');
+                    container.innerHTML = '<img src="' + e.target.result + '" class="absolute inset-0 w-full h-full object-cover rounded-xl" />';
+                    container.classList.remove('p-6'); // remove padding for full image
+                };
+                reader.readAsDataURL(file);
+            }
+        };
+
+const randomBgImages = [
+            "https://images.unsplash.com/photo-1620825937374-87fc7d62828e?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
+            "https://images.unsplash.com/photo-1587620962725-abab7fe55159?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
+            "https://images.unsplash.com/photo-1633356122544-f134324a6cee?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80"
+        ];
+
+        const feedContainer = document.getElementById('feedContainer');
+
+        // ==== 渲染動態牆 ====
+        function renderFeed() {
+            feedContainer.innerHTML = '';
+
+            mockPosts.forEach(post => {
+
+                // 組合歷史留言 HTML
+                const commentsHtml = post.comments.map(c => `
+                    <div class="mb-1 text-sm leading-snug">
+                        <span class="font-bold text-gray-900 mr-1 cursor-pointer hover:underline">${c.user}</span>
+                        <span class="text-gray-700 break-words">${c.text}</span>
+                    </div>
+                `).join('');
+
+                const cardHtml = `
+                    <div class="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col h-full fade-in" id="post-${post.id}">
+                        
+                        <!-- 貼文頭部 (作者資訊) -->
+                        <div class="p-4 flex items-center justify-between">
+                            <div class="flex items-center gap-3 cursor-pointer group">
+                                <div class="w-8 h-8 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center text-sm shadow-sm group-hover:scale-110 transition-transform">
+                                    ${post.avatar}
+                                </div>
+                                <div>
+                                    <h4 class="font-bold text-sm text-gray-900 group-hover:underline">${post.author}</h4>
+                                    <span class="text-xs text-gray-400 font-medium">${post.timeAgo}</span>
+                                </div>
+                            </div>
+                            <button class="text-gray-400 hover:text-gray-700">
+                                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
+                            </button>
+                        </div>
+
+                        <!-- 圖片區 (1:1 比例) -->
+                        <div class="img-container border-y border-gray-100">
+                            <img src="${post.image}" alt="${post.title}" loading="lazy" class="hover:scale-105 transition-transform duration-700 cursor-pointer">
+                        </div>
+
+                        <!-- 互動按鈕與內文區 -->
+                        <div class="px-4 pt-3 flex-1 flex flex-col">
+                            
+                            <!-- 按鈕 -->
+                            <div class="flex gap-4 mb-3">
+                                <button onclick="toggleLike(${post.id})" class="transform active:scale-75 transition-transform">
+                                    <svg class="w-7 h-7 ${post.isLiked ? 'text-red-500 fill-current' : 'text-gray-800'}" fill="${post.isLiked ? 'currentColor' : 'none'}" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path></svg>
+                                </button>
+                                <button onclick="focusComment(${post.id})" class="transform active:scale-75 transition-transform">
+                                    <svg class="w-7 h-7 text-gray-800" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
+                                </button>
+                            </div>
+                            
+                            <div class="font-bold text-sm mb-2 text-gray-900" id="like-count-${post.id}">${post.likes} 個讚</div>
+
+                            <!-- 工作流介紹 (名稱、說明、效果) -->
+                            <div class="mb-4 text-sm space-y-2">
+                                <div>
+                                    <span class="font-extrabold text-gray-900 mr-2 border-b-2 border-indigo-200">🚩 ${post.title}</span>
+                                </div>
+                                <p class="text-gray-800 leading-relaxed">${post.desc}</p>
+                                <div class="bg-indigo-50/50 p-2.5 rounded-lg border border-indigo-100 text-indigo-900 font-medium">
+                                    ${post.result}
+                                </div>
+                            </div>
+
+                            <!-- 留言區 (歷史留言) -->
+                            <div class="mt-auto border-t border-gray-100 pt-3">
+                                <!-- 留言容器限制高度並可捲動 -->
+                                <div class="max-h-[80px] overflow-y-auto hide-scrollbar mb-3" id="comments-list-${post.id}">
+                                    ${commentsHtml}
+                                </div>
+                            </div>
+
+                        </div>
+                        
+                        <!-- 新增留言輸入框 (固定在卡片底部) -->
+                        <div class="px-4 py-3 border-t border-gray-100 flex items-center bg-gray-50/30">
+                            <div class="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs mr-2 shrink-0">😊</div>
+                            <input type="text" id="comment-input-${post.id}" placeholder="新增留言..." class="flex-1 bg-transparent text-sm border-none focus:ring-0 outline-none placeholder-gray-400" onkeypress="handleCommentEnter(event, ${post.id})">
+                            <button onclick="addComment(${post.id})" class="text-blue-500 font-bold text-sm opacity-50 hover:opacity-100 transition-opacity whitespace-nowrap ml-2">發布</button>
+                        </div>
+
+                    </div>
+                `;
+                feedContainer.insertAdjacentHTML('beforeend', cardHtml);
+            });
+        }
+
+        // ==== 互動功能邏輯 ====
+
+        // 點擊愛心
+        window.toggleLike = function (id) {
+            const post = mockPosts.find(p => p.id === id);
+            if (post) {
+                post.isLiked = !post.isLiked;
+                post.likes += post.isLiked ? 1 : -1;
+                // 為了效能，只重新渲染這張卡片太麻煩，這裡直接重繪全部 (反正資料量小)
+                renderFeed();
+            }
+        };
+
+        // 焦點移至留言框
+        window.focusComment = function (id) {
+            document.getElementById(`comment-input-${id}`).focus();
+        };
+
+        // 處理按下 Enter 留言
+        window.handleCommentEnter = function (event, id) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                addComment(id);
+            }
+        };
+
+        // 新增留言
+        window.addComment = function (id) {
+            const inputEl = document.getElementById(`comment-input-${id}`);
+            const text = inputEl.value.trim();
+
+            if (text === "") return;
+
+            const post = mockPosts.find(p => p.id === id);
+            if (post) {
+                // 將新留言塞入該貼文的陣列前端 (或後端看排序需求，這邊塞後端)
+                post.comments.push({
+                    user: "My_Account", // 模擬當前登入者
+                    text: text
+                });
+
+                // 重繪
+                renderFeed();
+
+                // 重繪後，將該留言區滾動到最底
+                const listEl = document.getElementById(`comments-list-${id}`);
+                if (listEl) {
+                    listEl.scrollTop = listEl.scrollHeight;
+                }
+            }
+        };
+
+        // ==== Modal 控制邏輯 ====
+        const modal = document.getElementById('uploadModal');
+        const postForm = document.getElementById('postForm');
+
+        window.openModal = function () {
+            modal.classList.add('active');
+            document.body.style.overflow = 'hidden'; // 防止背景滾動
+        };
+
+        window.closeModal = function () {
+            modal.classList.remove('active');
+            document.body.style.overflow = '';
+            postForm.reset();
+            window.uploadedImageURL = null;
+            const container = document.getElementById('imageUploadContainer');
+            if(container) {
+                container.innerHTML = `<div class="w-12 h-12 bg-white rounded-full shadow-sm flex items-center justify-center mb-3 group-hover:scale-110 transition-transform text-blue-500 relative z-10"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg></div><span class="text-sm font-bold text-gray-600 relative z-10">點擊選擇照片</span><span class="text-xs text-gray-400 mt-1 relative z-10">支援 JPG, PNG 格式</span>`;
+                container.classList.add('p-6');
+            }
+        };
+
+        // 處理表單發布
+        postForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+
+            const btn = document.getElementById('submitPostBtn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = `<svg class="animate-spin -ml-1 mr-2 h-5 w-5 text-white inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> 發布中...`;
+            btn.disabled = true;
+
+            // 隨機抽一張圖作為上傳預覽
+            const randomImg = randomBgImages[Math.floor(Math.random() * randomBgImages.length)];
+
+            setTimeout(() => {
+                // 將新貼文插到陣列最前面
+                mockPosts.unshift({
+                    id: Date.now(),
+                    author: "My_Account",
+                    avatar: "😎",
+                    title: document.getElementById('postTitle').value,
+                    image: window.uploadedImageURL || randomImg,
+                    desc: document.getElementById('postDesc').value,
+                    result: document.getElementById('postResult').value,
+                    likes: 0,
+                    isLiked: false,
+                    comments: [],
+                    timeAgo: "剛剛"
+                });
+
+                renderFeed();
+                closeModal();
+
+                // 恢復按鈕狀態
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+
+                // 畫面滾到最上面看剛發的文
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+
+            }, 800);
+        });
+
+        // 初始載入渲染
+        renderFeed();
+
+        // ==== PROMPT 區塊邏輯 ====
+        const mockPrompts = [
+            {
+                id: 102,
+                title: "提示詞宗師 PROMPT",
+                author: "AI Empower Team",
+                tag: "official",
+                desc: "協助你將簡短、模糊的需求，擴寫成結構完整且高品質的專家級 Prompt。",
+                content: `# Role: 首席提示詞煉金術士 (Chief Prompt Alchemist)
+## Profile
+- **Author**: Singularity Grandmaster
+- **Version**: 2.3 (CoT-Enhanced Edition)
+- **Goal**: 將用戶模糊的需求，透過嚴密的邏輯推演，轉化為生產級的「大師級 Prompt」。
+- **Core Philosophy**: 「透視本質，先思後行」。不僅僅是修飾文字，而是重構思維邏輯。
+
+## 評分標準 (The Rubric)
+我們將針對生成的 Prompt 進行 5 維度極限測試 (0-100 分)：
+1. **結構性 (Structure)**: Markdown 層級是否如手術刀般精準？視覺動線是否無阻礙？
+2. **明確性 (Clarity)**: 是否消除了所有歧義？是否有具體的 [Context] 與 [Constraints]？
+3. **邏輯力 (Reasoning)**: 是否植入了思維鏈 (CoT)？流程是否閉環？
+4. **防禦性 (Defense)**: 邊界條件 (Edge Cases) 是否被覆蓋？是否防止了 AI 偷懶或幻覺？
+5. **模組化 (Modularity)**: 變數 {{Variables}} 設置是否便於規模化復用？
+
+## Workflow: 煉成循環 (The Alchemy Loop)
+請嚴格依照以下順序執行，不可跳過任何步驟：
+
+### Phase 1: 需求診斷與過濾 (Diagnosis & Filtering)
+**輸入分析**：審視用戶意圖。
+**CRITICAL RULE (邏輯閘)**：若用戶輸入屬於以下情況，**禁止生成 Prompt**，直接進入「引導模式」：
+* 目標模糊（如：「寫個文案」、「幫我寫程式」但未指明細節）。
+* 缺乏關鍵變數（如：未指定受眾、語氣、平台）。
+* *Action*: 請用專業且引導性的口吻，提出 2-3 個最具殺傷力（關鍵）的問題，協助用戶釐清核心需求。
+
+### Phase 2: 煉成反應 (The Crucible - Internal Processing)
+**[重要]** 在輸出最終結果前，你必須先在後台執行 <thinking_process>（思維鏈）：
+1. **Drafting**: 構建 V1 版本的 Prompt 架構。
+2. **Critique**: 扮演一個挑剔的測試者，攻擊 V1 的弱點（例如：如果用戶輸入空值會怎樣？如果用戶語言設定錯誤怎麼辦？指令是否會讓 AI 產生幻覺？）。
+3. **Optimization**: 針對 Critique 發現的缺點進行修補，寫入防呆機制、範例 (Few-Shot) 與邏輯引導。
+
+### Phase 3: 最終交付 (Final Output)
+確認經過 Phase 2 的推演與優化後，請依序輸出以下三個區塊：
+
+#### 1. 🧪 煉成報告 (Alchemy Report)
+> - **品質評級**: [S/A/B] (基於 Rubric 的客觀評分)
+> - **邏輯修復**: [說明你發現了原需求的什麼漏洞，並如何修補了它]
+> - **關鍵機制**: [解釋你加入了什麼特殊的 Prompt 技巧，如 SCQA、Few-Shot、Role-Play 或防注入機制]
+
+#### 2. 📜 大師級 Prompt (Masterpiece)
+(必須使用 Markdown 代碼塊封裝，方便一鍵複製)
+*(結構範本：# Role -> ## Profile -> ## Constraints -> ## Workflow -> ## Rules -> ## Initialization)*
+*(規範：所有需要用戶填寫的內容，請統一使用 {{user_variable}} 雙大括號格式標註)*
+
+#### 3. ⚙ 使用指南 (User Guide)
+(一句話說明如何啟動此 Prompt，例如：「請填入變數後發送...」)
+
+---
+## Example (Mental Model)
+**User**: "幫我寫個 Python 爬蟲。"
+**Alchemist (Phase 1)**: (拒絕生成) "為了確保代碼可用，請告訴我：1. 目標網站結構？ 2. 需要抓取的具體欄位？ 3. 是否需要處理反爬機制？"
+**User**: "抓取 PTT 標題，不需要反爬，存成 CSV。"
+**Alchemist (Phase 2 - Hidden)**:
+* *Thinking: 結構簡單，但需注意 PTT 有年齡驗證頁面 (Defense)。需加入 BeautifulSoup 與 requests 庫。輸出格式限制為 CSV。*
+**Alchemist (Phase 3)**: [輸出包含處理 cookie 邏輯與完整註解的 Python Expert Prompt]
+
+---
+## Initialization
+你現在是 v2.3 版的「首席提示詞煉金術士」。
+請簡短自我介紹（不超過 50 字），展現你的專業、嚴謹與邏輯力。
+最後詢問：「請丟入您的原始想法，我將為您提煉出邏輯最嚴密的 Prompt。」`,
+                design: "Meta-Prompt 的設計概念，利用 AI 理解 Prompt Engineering 的能力，讓 AI 自己生成高品質的 Prompt。結構化輸出有助於後續直接複製使用。",
+                updates: []
+            }
+        ];
+
+        let currentDetailPrompt = null;
+
+        // 切換頁籤
+        window.switchTab = function (tabName) {
+            const tabFeed = document.getElementById('tab-feed');
+            const tabPrompts = document.getElementById('tab-prompts');
+            const secFeed = document.getElementById('section-feed');
+            const secPrompts = document.getElementById('section-prompts');
+
+            if (tabName === 'feed') {
+                tabFeed.className = "py-3 px-6 font-bold text-gray-900 border-b-2 border-gray-900 transition-colors";
+                tabPrompts.className = "py-3 px-6 font-bold text-gray-400 hover:text-gray-700 transition-colors";
+                secFeed.classList.remove('hidden');
+                secPrompts.classList.add('hidden');
+            } else {
+                tabPrompts.className = "py-3 px-6 font-bold text-gray-900 border-b-2 border-gray-900 transition-colors";
+                tabFeed.className = "py-3 px-6 font-bold text-gray-400 hover:text-gray-700 transition-colors";
+                secPrompts.classList.remove('hidden');
+                secFeed.classList.add('hidden');
+                renderPrompts(); // 初次切換或重新切換時渲染
+            }
+        };
+
+        // 渲染 PROMPT 卡片
+        window.renderPrompts = function () {
+            const container = document.getElementById('promptContainer');
+            const searchKeyword = document.getElementById('promptSearchInput').value.toLowerCase();
+            const tagFilter = document.getElementById('promptTagFilter').value;
+
+            container.innerHTML = '';
+
+            const filtered = mockPrompts.filter(p => {
+                const matchSearch = p.title.toLowerCase().includes(searchKeyword) || p.desc.toLowerCase().includes(searchKeyword);
+                const matchTag = tagFilter === 'all' ? true : p.tag === tagFilter;
+                return matchSearch && matchTag;
+            });
+
+            if (filtered.length === 0) {
+                container.innerHTML = `<div class="col-span-full py-10 text-center text-gray-500 font-medium">找不到符合條件的 PROMPT</div>`;
+                return;
+            }
+
+            filtered.forEach(p => {
+                const isOfficial = p.tag === 'official';
+                const badgeHtml = isOfficial
+                    ? `<span class="bg-yellow-100 text-yellow-800 text-xs px-2.5 py-1 rounded-full font-bold inline-flex items-center gap-1 shadow-sm"><svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path></svg>官方</span>`
+                    : `<span class="bg-blue-100 text-blue-800 text-xs px-2.5 py-1 rounded-full font-bold inline-flex items-center gap-1 shadow-sm"><svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"></path></svg>社群</span>`;
+
+                const cardHtml = `
+                    <div class="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col h-full fade-in">
+                        <div class="p-5 flex-1 flex flex-col relative">
+                            <div class="flex justify-between items-start mb-3 gap-2">
+                                <h4 class="font-extrabold text-lg text-gray-900 leading-tight">${p.title}</h4>
+                                <div class="shrink-0 mt-0.5">${badgeHtml}</div>
+                            </div>
+                            <div class="text-xs text-gray-500 mb-3 font-medium flex items-center gap-1">
+                                <span class="w-5 h-5 bg-gray-100 rounded-full flex items-center justify-center text-[10px] border border-gray-200">${isOfficial ? '👑' : '👤'}</span>
+                                提供者：${p.author}
+                            </div>
+                            <p class="text-sm text-gray-600 leading-relaxed line-clamp-3 flex-1 bg-gray-50/50 p-2 rounded-lg border border-gray-50">${p.desc}</p>
+                        </div>
+                        <div class="px-5 py-4 bg-gray-50 border-t border-gray-100 flex gap-2">
+                            <button onclick="copyPromptCardText(${p.id}, this)" class="flex-1 bg-white hover:bg-gray-100 border border-gray-300 text-gray-700 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-1.5 transition-colors shadow-sm active:scale-95">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                                <span>一鍵複製</span>
+                            </button>
+                            <button onclick="openPromptDetail(${p.id})" class="flex-1 bg-gray-900 hover:bg-black text-white py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-1.5 transition-colors shadow-sm active:scale-95">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477-4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
+                                <span>詳細閱讀</span>
+                            </button>
+                        </div>
+                    </div>
+                `;
+                container.insertAdjacentHTML('beforeend', cardHtml);
+            });
+        };
+
+        window.filterPrompts = function () {
+            renderPrompts();
+        };
+
+        // 一鍵複製 (卡片端)
+        window.copyPromptCardText = function (id, btnElement) {
+            const p = mockPrompts.find(x => x.id === id);
+            if (p) {
+                navigator.clipboard.writeText(p.content).then(() => {
+                    const span = btnElement.querySelector('span');
+                    const origText = span.innerText;
+                    span.innerText = "複製成功!";
+                    btnElement.classList.remove('text-gray-700', 'border-gray-300');
+                    btnElement.classList.add('text-green-600', 'border-green-300', 'bg-green-50');
+                    setTimeout(() => {
+                        span.innerText = origText;
+                        btnElement.classList.add('text-gray-700', 'border-gray-300');
+                        btnElement.classList.remove('text-green-600', 'border-green-300', 'bg-green-50');
+                    }, 2000);
+                });
+            }
+        };
+
+        // 開啟詳細視圖 Modal
+        window.openPromptDetail = function (id) {
+            currentDetailPrompt = mockPrompts.find(x => x.id === id);
+            if (!currentDetailPrompt) return;
+
+            const p = currentDetailPrompt;
+            document.getElementById('detailTitle').innerText = p.title;
+            const badge = document.getElementById('detailBadge');
+            const mobileBadge = document.getElementById('detailBadgeMobile');
+
+            if (p.tag === 'official') {
+                badge.className = "text-xs px-2.5 py-1 rounded-full font-bold whitespace-nowrap hidden sm:inline-block bg-yellow-100 text-yellow-800";
+                badge.innerHTML = `<svg class="w-3 h-3 inline-block -mt-0.5 mr-1" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path></svg>官方`;
+                mobileBadge.className = "sm:hidden text-xs px-2 py-0.5 rounded-full font-bold mb-2 inline-block bg-yellow-100 text-yellow-800";
+                mobileBadge.innerHTML = `⭐ 官方`;
+            } else {
+                badge.className = "text-xs px-2.5 py-1 rounded-full font-bold whitespace-nowrap hidden sm:inline-block bg-blue-100 text-blue-800";
+                badge.innerHTML = `<svg class="w-3 h-3 inline-block -mt-0.5 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"></path></svg>社群`;
+                mobileBadge.className = "sm:hidden text-xs px-2 py-0.5 rounded-full font-bold mb-2 inline-block bg-blue-100 text-blue-800";
+                mobileBadge.innerHTML = `👥 社群`;
+            }
+
+            document.getElementById('detailDesc').innerText = p.desc;
+            document.getElementById('detailContentBlock').innerText = p.content;
+
+            const designToggle = document.getElementById('designSection');
+            if (p.design) {
+                designToggle.classList.remove('hidden');
+                document.getElementById('designContent').innerText = p.design;
+            } else {
+                designToggle.classList.add('hidden');
+            }
+
+            
+
+            // 渲染版本列表
+            renderVersionHistory(p);
+
+            // 重置新增版本表單
+            document.getElementById('updateVersionForm').classList.add('hidden');
+            document.getElementById('updateVersionForm').reset();
+
+            // 重置設計說明為收合狀態
+            document.getElementById('designContent').classList.add('hidden');
+            document.getElementById('designToggleIcon').classList.remove('rotate-180');
+
+            // 開啟 modal
+            const modal = document.getElementById('promptDetailModal');
+            const content = document.getElementById('promptDetailContent');
+            modal.classList.remove('pointer-events-none');
+            // Modal動畫
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+                modal.classList.add('opacity-100');
+                content.classList.remove('scale-95');
+                content.classList.add('scale-100');
+            }, 10);
+            document.body.style.overflow = 'hidden';
+        };
+
+        window.closePromptDetailModal = function () {
+            const modal = document.getElementById('promptDetailModal');
+            const content = document.getElementById('promptDetailContent');
+            modal.classList.remove('opacity-100');
+            modal.classList.add('opacity-0');
+            content.classList.remove('scale-100');
+            content.classList.add('scale-95');
+            setTimeout(() => {
+                modal.classList.add('pointer-events-none');
+                document.body.style.overflow = '';
+            }, 300);
+            currentDetailPrompt = null;
+        };
+
+        // 詳細視圖的一鍵複製 (主 PROMPT)
+        window.copyDetailPrompt = function () {
+            if (currentDetailPrompt) {
+                navigator.clipboard.writeText(currentDetailPrompt.content).then(() => {
+                    const textEl = document.getElementById('detailCopyText');
+                    textEl.innerText = "已複製!";
+                    const iconEl = document.getElementById('detailCopyBtn');
+                    iconEl.classList.add('bg-green-600', 'border-green-500');
+                    setTimeout(() => {
+                        textEl.innerText = "一鍵複製";
+                        iconEl.classList.remove('bg-green-600', 'border-green-500');
+                    }, 2000);
+                });
+            }
+        };
+
+        // 展開/收合 設計說明
+        window.toggleDesign = function () {
+            const content = document.getElementById('designContent');
+            const icon = document.getElementById('designToggleIcon');
+            if (content.classList.contains('hidden')) {
+                content.classList.remove('hidden');
+                icon.classList.add('rotate-180');
+            } else {
+                content.classList.add('hidden');
+                icon.classList.remove('rotate-180');
+            }
+        };
+
+        // 渲染版本歷史更新
+        window.renderVersionHistory = function (p) {
+            const listEl = document.getElementById('versionsList');
+            listEl.innerHTML = '';
+            if (!p.updates || p.updates.length === 0) {
+                listEl.innerHTML = '<div class="p-5 text-center text-sm text-gray-400">目前尚無更新版本。</div>';
+                return;
+            }
+
+            p.updates.forEach((update, idx) => {
+                const html = `
+                    <div class="p-5">
+                        <div class="flex items-center gap-2 mb-2">
+                            <span class="bg-indigo-100 text-indigo-800 text-xs font-bold px-2 py-0.5 rounded">v${p.updates.length - idx}</span>
+                            <span class="text-xs text-gray-500">${update.date}</span>
+                        </div>
+                        <p class="text-sm font-bold text-gray-800 mb-3">${update.desc}</p>
+                        
+                        <div class="relative bg-[#1e1e1e] rounded-lg p-4 border border-gray-800 shadow-inner group">
+                            <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                                <button onclick="copyVersionText(${idx})" id="vCopyBtn-${idx}" class="bg-gray-700 hover:bg-gray-600 text-white text-xs px-2.5 py-1 rounded flex items-center gap-1 transition-colors">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                                    <span id="vCopyText-${idx}">複製</span>
+                                </button>
+                            </div>
+                            <pre class="text-gray-300 text-sm font-mono whitespace-pre-wrap max-h-[30vh] overflow-y-auto custom-scrollbar leading-relaxed">${update.content}</pre>
+                        </div>
+                    </div>
+                `;
+                // 新的更新放在前面 (從大到小排)
+                listEl.insertAdjacentHTML('afterbegin', html);
+            });
+        };
+
+        // 開關新增版本表單
+        window.toggleUpdateForm = function () {
+            const form = document.getElementById('updateVersionForm');
+            if (form.classList.contains('hidden')) {
+                form.classList.remove('hidden');
+                form.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            } else {
+                form.classList.add('hidden');
+            }
+        };
+
+        // 提交版本更新
+        document.getElementById('updateVersionForm').addEventListener('submit', function (e) {
+            e.preventDefault();
+            if (!currentDetailPrompt) return;
+
+            const btn = document.getElementById('submitUpdateBtn');
+            const origText = btn.innerText;
+            btn.innerHTML = '更新中...';
+            btn.disabled = true;
+
+            setTimeout(() => {
+                if (!currentDetailPrompt.updates) currentDetailPrompt.updates = [];
+
+                const today = new Date();
+                const dateString = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+                currentDetailPrompt.updates.push({
+                    date: dateString,
+                    desc: document.getElementById('updateDesc').value,
+                    content: document.getElementById('updateContent').value
+                });
+
+                // 重新渲染歷史紀錄
+                renderVersionHistory(currentDetailPrompt);
+                toggleUpdateForm();
+
+                btn.innerText = origText;
+                btn.disabled = false;
+            }, 400);
+        });
+
+        // 複製子版本 PROMPT
+        window.copyVersionText = function (idx) {
+            if (!currentDetailPrompt || !currentDetailPrompt.updates[idx]) return;
+            navigator.clipboard.writeText(currentDetailPrompt.updates[idx].content).then(() => {
+                const textEl = document.getElementById(`vCopyText-${idx}`);
+                textEl.innerText = "成功!";
+                const iconEl = document.getElementById(`vCopyBtn-${idx}`);
+                iconEl.classList.add('bg-green-600', 'border-green-500');
+                setTimeout(() => {
+                    textEl.innerText = "複製";
+                    iconEl.classList.remove('bg-green-600', 'border-green-500');
+                }, 2000);
+            });
+        };
+
+        // 渲染 PROMPT 留言區塊
+        window.renderPromptComments = function (p) {
+            const listEl = document.getElementById('promptCommentsList');
+            listEl.innerHTML = '';
+
+            if (!p.promptComments || p.promptComments.length === 0) {
+                listEl.innerHTML = '<div class="p-5 text-center text-sm text-gray-400">目前尚無討論，成為第一個留言的人吧！</div>';
+                return;
+            }
+
+            p.promptComments.forEach(comment => {
+                const html = `
+                    <div class="px-5 py-3 flex gap-3">
+                        <div class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-sm shadow-sm shrink-0">
+                            ${comment.avatar || '👤'}
+                        </div>
+                        <div class="flex-1">
+                            <div class="flex items-center gap-2 mb-1">
+                                <span class="font-bold text-sm text-gray-900">${comment.user}</span>
+                                <span class="text-xs text-gray-400">${comment.time}</span>
+                            </div>
+                            <p class="text-sm text-gray-700 bg-gray-50 border border-gray-100 p-2.5 rounded-lg inline-block">${comment.text}</p>
+                        </div>
+                    </div>
+                `;
+                listEl.insertAdjacentHTML('beforeend', html);
+            });
+            // 滾動到底部
+            listEl.scrollTop = listEl.scrollHeight;
+        };
+
+        // 處理按下 Enter 留言
+        window.handlePromptCommentEnter = function (event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                addPromptComment();
+            }
+        };
+
+        // 新增留言
+        window.addPromptComment = function () {
+            if (!currentDetailPrompt) return;
+
+            const inputEl = document.getElementById('promptCommentInput');
+            const text = inputEl.value.trim();
+            if (text === '') return;
+
+            if (!currentDetailPrompt.promptComments) {
+                currentDetailPrompt.promptComments = [];
+            }
+
+            currentDetailPrompt.promptComments.push({
+                user: "My_Account",
+                avatar: "😎",
+                time: "剛剛",
+                text: text
+            });
+
+            inputEl.value = '';
+            renderPromptComments(currentDetailPrompt);
+        };
+
+        // 上傳 Modal 控制邏輯
+        window.openPromptUploadModal = function () {
+            const modal = document.getElementById('promptUploadModal');
+            const content = document.getElementById('promptUploadContent');
+            modal.classList.remove('pointer-events-none');
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+                modal.classList.add('opacity-100');
+                content.classList.remove('scale-95');
+                content.classList.add('scale-100');
+            }, 10);
+            document.body.style.overflow = 'hidden';
+        };
+
+        window.closePromptUploadModal = function () {
+            const modal = document.getElementById('promptUploadModal');
+            const content = document.getElementById('promptUploadContent');
+            modal.classList.remove('opacity-100');
+            modal.classList.add('opacity-0');
+            content.classList.remove('scale-100');
+            content.classList.add('scale-95');
+            setTimeout(() => {
+                modal.classList.add('pointer-events-none');
+                document.body.style.overflow = '';
+                document.getElementById('promptUploadForm').reset();
+            }, 300);
+        };
+
+        // 處理 PROMPT 上傳
+        document.getElementById('promptUploadForm').addEventListener('submit', function (e) {
+            e.preventDefault();
+            const btn = document.getElementById('submitNewPromptBtn');
+            const origText = btn.innerText;
+            btn.innerHTML = `<svg class="animate-spin -ml-1 mr-2 h-5 w-5 text-white inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>處理中...`;
+            btn.disabled = true;
+            btn.classList.add('opacity-80', 'cursor-not-allowed');
+
+            setTimeout(() => {
+                mockPrompts.unshift({
+                    id: Date.now(),
+                    title: document.getElementById('newPromptTitle').value,
+                    author: "My_Account",
+                    tag: "community",
+                    desc: document.getElementById('newPromptDesc').value,
+                    content: document.getElementById('newPromptContent').value,
+                    design: document.getElementById('newPromptDesign').value,
+                    updates: []
+                });
+                renderPrompts();
+                closePromptUploadModal();
+                btn.innerText = origText;
+                btn.disabled = false;
+                btn.classList.remove('opacity-80', 'cursor-not-allowed');
+                // Auto switch to prompts tab if currently on feed
+                const secPrompts = document.getElementById('section-prompts');
+                if (secPrompts.classList.contains('hidden')) {
+                    switchTab('prompts');
+                }
+            }, 600);
+        });
+
+    </script>
+</body>
+
+</html>

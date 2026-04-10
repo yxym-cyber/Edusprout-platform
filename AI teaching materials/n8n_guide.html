@@ -1,0 +1,1676 @@
+<!doctype html>
+<html lang="zh-TW">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>n8n 工作流實作教學</title>
+  <!-- 引入 Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .transition-all {
+      transition-duration: 300ms;
+    }
+
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+
+    /* 隱藏未選擇的內容區塊 */
+    .content-section {
+      display: none;
+    }
+
+    .content-section.active {
+      display: block;
+      animation: fadeIn 0.4s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* 自訂核取方塊樣式 */
+    .custom-checkbox {
+      appearance: none;
+      width: 1.5rem;
+      height: 1.5rem;
+      border: 2px solid #cbd5e1;
+      border-radius: 0.375rem;
+      background-color: white;
+      cursor: pointer;
+      transition: all 0.2s ease-in-out;
+      position: relative;
+    }
+
+    .custom-checkbox:checked {
+      background-color: #10b981;
+      border-color: #10b981;
+    }
+
+    .custom-checkbox:checked::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 45%;
+      width: 0.4rem;
+      height: 0.8rem;
+      border: solid white;
+      border-width: 0 2.5px 2.5px 0;
+      transform: translate(-50%, -50%) rotate(45deg);
+    }
+
+    /* 選擇單元按鈕的作用中樣式 */
+    .tab-btn.active {
+      background-color: #4f46e5;
+      color: white;
+      border-color: #4f46e5;
+      font-weight: 700;
+    }
+  </style>
+
+  <style>
+    .openclaw-raw { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", "Helvetica Neue", Arial, sans-serif; font-size: 16px; line-height: 1.75; color: #1a1a2e; }
+    .openclaw-raw .page-wrap { max-width: 820px; margin: 0 auto; padding: 12px 0px 80px; }
+    .openclaw-raw .toc { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px 28px; margin-bottom: 48px; }
+    .openclaw-raw .toc h2 { font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #64748b; margin-bottom: 14px; }
+    .openclaw-raw .toc ol { padding-left: 20px; }
+    .openclaw-raw .toc li { margin-bottom: 6px; }
+    .openclaw-raw .toc a { color: #2563eb; text-decoration: none; font-weight: 500; }
+    .openclaw-raw .toc a:hover { text-decoration: underline; }
+    .openclaw-raw .section { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 36px 36px 40px; margin-bottom: 32px; }
+    .openclaw-raw .section-header { display: flex; align-items: center; gap: 14px; margin-bottom: 24px; }
+    .openclaw-raw .step-num { flex-shrink: 0; width: 36px; height: 36px; border-radius: 50%; background: #2563eb; color: #fff; font-weight: 700; font-size: 0.95rem; display: flex; align-items: center; justify-content: center; }
+    .openclaw-raw .section h2 { font-size: 1.3rem; font-weight: 700; color: #0f172a; margin: 0; }
+    .openclaw-raw p { margin-bottom: 14px; }
+    .openclaw-raw p:last-child { margin-bottom: 0; }
+    .openclaw-raw h3 { font-size: 1rem; font-weight: 700; color: #0f172a; margin: 24px 0 10px; }
+    .openclaw-raw h3:first-child { margin-top: 0; }
+    .openclaw-raw ul, .openclaw-raw ol { padding-left: 22px; margin-bottom: 14px; }
+    .openclaw-raw li { margin-bottom: 6px; list-style-position: outside; }
+    .openclaw-raw a { color: #2563eb; }
+    .openclaw-raw code { font-family: "SF Mono", "Fira Code", Menlo, Consolas, monospace; font-size: 0.88em; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 5px; padding: 1px 6px; color: #be185d; }
+    .openclaw-raw pre { background: #0f172a; border-radius: 10px; padding: 18px 22px; overflow-x: auto; margin: 16px 0; border: none; }
+    .openclaw-raw pre code { font-size: 0.87rem; background: none; border: none; padding: 0; color: #e2e8f0; }
+    .openclaw-raw .callout { border-radius: 10px; padding: 14px 18px; margin: 18px 0; font-size: 0.92rem; display: flex; gap: 12px; align-items: flex-start; }
+    .openclaw-raw .callout-icon { flex-shrink: 0; font-size: 1.1rem; margin-top: 1px; }
+    .openclaw-raw .callout.tip { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; }
+    .openclaw-raw .callout.warn { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; }
+    .openclaw-raw .callout.info { background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; }
+    .openclaw-raw .callout.danger { background: #fff1f2; border: 1px solid #fecdd3; color: #9f1239; }
+    .openclaw-raw .terminal { border-radius: 10px; overflow: hidden; margin: 20px 0; box-shadow: 0 4px 20px rgba(0,0,0,0.18); font-family: "SF Mono", "Fira Code", Menlo, Consolas, monospace; }
+    .openclaw-raw .term-header { background: #3a3a3a; padding: 10px 16px; display: flex; align-items: center; gap: 7px; }
+    .openclaw-raw .term-dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+    .openclaw-raw .term-dot.r { background: #ff5f57; }
+    .openclaw-raw .term-dot.y { background: #ffbd2e; }
+    .openclaw-raw .term-dot.g { background: #28c840; }
+    .openclaw-raw .term-title { margin-left: 8px; font-size: 0.78rem; color: #aaa; flex: 1; text-align: center; }
+    .openclaw-raw .term-body { background: #1a1a2e; padding: 18px 22px; overflow-x: auto; }
+    .openclaw-raw .term-body pre { margin: 0; background: none; padding: 0; border-radius: 0; }
+    .openclaw-raw .term-body pre code { font-size: 0.87rem; color: #e2e8f0; background: none; border: none; padding: 0; }
+    .openclaw-raw .term-prompt { color: #4ade80; }
+    .openclaw-raw .term-cmd { color: #e2e8f0; }
+    .openclaw-raw .term-out { color: #94a3b8; }
+    .openclaw-raw .term-ok { color: #4ade80; }
+    .openclaw-raw .term-warn { color: #fbbf24; }
+    .openclaw-raw .term-key { color: #7dd3fc; }
+    .openclaw-raw .term-val { color: #f9a8d4; }
+    .openclaw-raw .diagram { margin: 20px 0; text-align: center; }
+    .openclaw-raw .diagram svg { max-width: 100%; height: auto; }
+    .openclaw-raw .config-table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9rem; }
+    .openclaw-raw .config-table th { background: #f1f5f9; border: 1px solid #e2e8f0; padding: 9px 14px; text-align: left; font-weight: 700; color: #374151; }
+    .openclaw-raw .config-table td { border: 1px solid #e2e8f0; padding: 9px 14px; vertical-align: top; }
+    .openclaw-raw .config-table tr:hover td { background: #f8fafc; }
+    .openclaw-raw .badge-val { display: inline-block; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 4px; padding: 1px 8px; font-family: "SF Mono", Menlo, monospace; font-size: 0.82em; color: #be185d; }
+    .openclaw-raw .tabs { margin: 16px 0; }
+    .openclaw-raw .tab-btns { display: flex; gap: 8px; margin-bottom: 0; }
+    .openclaw-raw .tab-btn { padding: 7px 18px; border: 1px solid #e2e8f0; border-bottom: none; border-radius: 8px 8px 0 0; background: #f1f5f9; cursor: pointer; font-size: 0.85rem; font-weight: 600; color: #64748b; transition: background 0.15s; }
+    .openclaw-raw .tab-btn.active { background: #0f172a; color: #fff; border-color: #0f172a; }
+    .openclaw-raw .tab-panel { display: none; border: 1px solid #e2e8f0; border-radius: 0 8px 8px 8px; overflow: hidden; }
+    .openclaw-raw .tab-panel.active { display: block; }
+    .openclaw-raw .tab-panel pre { margin: 0; border-radius: 0; }
+    .openclaw-raw .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; margin-top: 20px; }
+    .openclaw-raw .card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 18px 18px 16px; text-decoration: none; color: inherit; transition: box-shadow 0.15s, transform 0.15s; }
+    .openclaw-raw .card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.08); transform: translateY(-2px); }
+    .openclaw-raw .card .card-icon { font-size: 1.4rem; margin-bottom: 8px; }
+    .openclaw-raw .card h4 { font-size: 0.95rem; font-weight: 700; margin-bottom: 4px; color: #0f172a; }
+    .openclaw-raw .card p { font-size: 0.82rem; color: #64748b; margin: 0; }
+    .openclaw-raw details { border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 10px; overflow: hidden; }
+    .openclaw-raw summary { padding: 14px 18px; font-weight: 600; cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center; font-size: 0.95rem; }
+    .openclaw-raw summary::-webkit-details-marker { display: none; }
+    .openclaw-raw summary::after { content: "＋"; color: #64748b; font-size: 1.1rem; }
+    .openclaw-raw details[open] summary::after { content: "－"; }
+    .openclaw-raw details[open] summary { background: #f8fafc; }
+    .openclaw-raw .faq-body { padding: 14px 18px 16px; font-size: 0.93rem; color: #374151; border-top: 1px solid #f1f5f9; }
+    .openclaw-raw footer { text-align: center; font-size: 0.82rem; color: #94a3b8; margin-top: 56px; }
+    .openclaw-raw footer a { color: #64748b; }
+    .openclaw-raw .steps { counter-reset: step; list-style: none; padding: 0; }
+    .openclaw-raw .steps > li { counter-increment: step; padding: 16px 16px 16px 60px; position: relative; border-left: 2px solid #e2e8f0; margin-left: 20px; margin-bottom: 8px; }
+    .openclaw-raw .steps > li::before { content: counter(step); position: absolute; left: -20px; top: 14px; width: 36px; height: 36px; border-radius: 50%; background: #fff; border: 2px solid #2563eb; color: #2563eb; font-weight: 700; font-size: 0.9rem; display: flex; align-items: center; justify-content: center; }
+    .openclaw-raw .steps > li:last-child { border-left-color: transparent; }
+    @media (max-width: 600px) {
+      .openclaw-raw .section { padding: 24px 20px 28px; }
+      .openclaw-raw .config-table { font-size: 0.82rem; }
+      .openclaw-raw .steps > li { padding-left: 44px; }
+    }
+  </style>
+
+</head>
+
+<body class="bg-gray-50 min-h-screen text-gray-800 font-sans p-4 md:p-8">
+  <div class="max-w-7xl mx-auto space-y-6">
+    <!-- Main Tab Navigation -->
+    <div class="flex justify-center mb-4">
+      <div class="bg-white p-1.5 rounded-2xl shadow-sm border border-gray-100 flex gap-1 items-center">
+        <button id="tab-workflow" class="px-8 py-3 rounded-xl font-bold bg-indigo-600 text-white shadow-md transition-all">工作流教學</button>
+        <button id="tab-ai-tools" class="px-8 py-3 rounded-xl font-bold bg-transparent text-gray-500 hover:text-gray-800 hover:bg-gray-50 transition-all">AI 工具教學</button>
+      </div>
+    </div>
+
+    <!-- ================= CONTENT: 工作流教學 (n8n Guide) ================= -->
+    <div id="content-workflow" class="flex flex-col h-[calc(100vh-10rem)] bg-white rounded-3xl shadow-xl overflow-hidden border border-gray-100 animate-[fadeIn_0.5s_ease-in-out] block">
+      <header class="bg-white border-b border-gray-200 px-6 py-5 flex flex-col md:flex-row justify-between items-center gap-4 z-10 shrink-0">
+        <div>
+          <h1 class="text-2xl font-extrabold flex items-center gap-3">
+            <span class="w-10 h-10 rounded-xl bg-orange-500 text-white flex items-center justify-center font-bold text-xl ring-4 ring-orange-100">n</span>
+            實作教學：建立專屬工作流
+          </h1>
+          <p class="text-gray-500 text-sm mt-1 ml-14">請依序勾選完成左側檢核表，跟隨步驟完成節點設定。</p>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <label class="text-xs font-bold text-gray-500 uppercase tracking-wider">切換教學模組</label>
+          <select id="workflow-selector" class="block w-56 rounded-xl border-gray-300 bg-gray-50 py-2.5 pl-3 pr-10 text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 sm:text-sm font-bold border cursor-pointer" onchange="switchWorkflow(this.value)">
+            <option value="proposal">計畫書工作流 (Proposal)</option>
+          </select>
+        </div>
+      </header>
+
+    <!-- 整體進度條區域 -->
+    <div
+      class="bg-indigo-50 px-6 py-4 flex flex-col sm:flex-row items-center gap-4 shrink-0 border-b border-indigo-100">
+      <div class="flex items-center gap-3 w-full sm:w-1/4">
+        <div class="w-10 h-10 rounded-full bg-indigo-200 flex items-center justify-center text-indigo-700 font-bold">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+          </svg>
+        </div>
+        <div>
+          <span class="block text-xs font-bold text-indigo-500 uppercase tracking-wider">整體完成進度</span>
+          <span id="progressText" class="text-lg font-extrabold text-indigo-900">0%</span>
+        </div>
+      </div>
+
+      <div class="w-full sm:w-3/4">
+        <div class="h-3 w-full bg-indigo-200/50 rounded-full overflow-hidden relative">
+          <div id="progressBar"
+            class="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-500 ease-out"
+            style="width: 0%"></div>
+          <!-- 發光特效 -->
+          <div
+            class="absolute top-0 right-0 bottom-0 w-20 bg-gradient-to-r from-transparent to-white/30 skew-x-12 translate-x-full animate-[shimmer_2s_infinite]">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 左右分欄主體區 -->
+    <div class="flex flex-1 overflow-hidden flex-col lg:flex-row relative">
+      <!-- 網頁讀取時的預設遮罩 (提升切換流暢度) -->
+      <div id="loadingOverlay" class="absolute inset-0 bg-white z-50 flex items-center justify-center hidden">
+        <div class="flex flex-col items-center">
+          <svg class="animate-spin h-10 w-10 text-indigo-600 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none"
+            viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+            </path>
+          </svg>
+          <span class="text-gray-500 font-medium">切換單元中...</span>
+        </div>
+      </div>
+
+      <!-- ================= 左側：實作步驟檢核表 ================= -->
+      <div
+        class="w-full lg:w-[380px] xl:w-[420px] bg-gray-50 border-r border-gray-200 overflow-y-auto flex flex-col shrink-0">
+        <div class="p-6">
+          <h2 class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">
+            實作檢核表 (Checklist)
+          </h2>
+
+          <!-- 動態渲染清單的容器 -->
+          <div id="checklistContainer" class="space-y-4">
+            <!-- Javascript 會將清單注入在此 -->
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= 右側：圖文教學區 ================= -->
+      <div class="flex-1 bg-white overflow-y-auto relative p-6 lg:p-10">
+        <!-- 預設未選擇步驟時的畫面 -->
+        <div id="emptyGuideState"
+          class="absolute inset-0 flex flex-col items-center justify-center text-center p-8 z-10 bg-white">
+          <div class="w-24 h-24 bg-indigo-50 rounded-full flex items-center justify-center mb-6">
+            <svg class="w-12 h-12 text-indigo-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122">
+              </path>
+            </svg>
+          </div>
+          <h3 class="text-2xl font-bold text-gray-800 mb-2">
+            請從左側點擊檢核表步驟
+          </h3>
+          <p class="text-gray-500 max-w-md">
+            這裡將會動態顯示該步驟的對應圖示與參數設定說明。完成該步驟後即可勾選左方的方塊。
+          </p>
+        </div>
+
+        <!-- 動態注入的教學內容容器 -->
+        <div id="guideContentContainer" class="max-w-3xl mx-auto space-y-8 hidden relative z-20">
+          <!-- 標題與標籤 -->
+          <div>
+            <div
+              class="inline-flex items-center px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-sm font-bold mb-3 border border-blue-200"
+              id="guideStepBadge">
+              第 1 步
+            </div>
+            <h2 class="text-3xl font-extrabold text-gray-900" id="guideTitle">
+              節點教學標題
+            </h2>
+            <p class="text-gray-600 mt-4 text-lg leading-relaxed" id="guideDesc">
+              步驟的詳細說明與情境介紹。
+            </p>
+          </div>
+
+          <!-- 警告提示 (不可直接複製 JSON) -->
+          <div class="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-lg flex items-start">
+            <svg class="w-6 h-6 text-amber-500 mr-3 shrink-0 mt-0.5" fill="none" stroke="currentColor"
+              viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z">
+              </path>
+            </svg>
+            <div>
+              <h4 class="font-bold text-amber-800 text-sm">
+                學習提醒：親自拖曳節點
+              </h4>
+              <p class="text-amber-700 text-sm mt-1">
+                為了確保您熟悉 n8n 的操作邏輯，本教學不提供任何可複製的 JSON
+                程式碼，請依照截圖指示，在您的 n8n 畫布上手動配置節點參數。
+              </p>
+            </div>
+          </div>
+
+          <!-- 截圖示意區 (使用具象化的 CSS 繪製節點替代真實圖片，確保即使沒有圖檔也能完美展示) -->
+          <div class="bg-gray-100 rounded-2xl p-6 border border-gray-200">
+            <div class="flex items-center justify-between mb-4">
+              <span class="text-sm font-bold text-gray-500 uppercase">n8n 畫面示意</span>
+              <div class="flex space-x-1.5">
+                <div class="w-3 h-3 rounded-full bg-red-400"></div>
+                <div class="w-3 h-3 rounded-full bg-yellow-400"></div>
+                <div class="w-3 h-3 rounded-full bg-green-400"></div>
+              </div>
+            </div>
+
+            <!-- 動態插入視圖 (節點示意或參數設定面板) -->
+            <div id="guideVisualArea"
+              class="bg-white rounded-xl shadow-sm border border-gray-200 p-8 min-h-[250px] flex items-center justify-center relative overflow-hidden">
+              <!-- JS 注入區 -->
+            </div>
+          </div>
+
+          <!-- 參數設定表格區 -->
+          <div>
+            <h3 class="text-xl font-bold text-gray-800 mb-4 pb-2 border-b-2 border-indigo-100 inline-block">
+              參數設定指引
+            </h3>
+            <div class="bg-white border text-gray-800 border-gray-200 rounded-xl overflow-hidden shadow-sm">
+              <table class="w-full text-left text-sm" id="guideTable">
+                <thead class="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th class="px-6 py-4 font-bold text-gray-600 w-1/3">
+                      欄位名稱 (Field)
+                    </th>
+                    <th class="px-6 py-4 font-bold text-gray-600">
+                      應填寫之設定值或說明
+                    </th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100" id="guideTableBody">
+                  <!-- JS 動態插入列 -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- 下一步按鈕與完成標記區 -->
+          <div class="pt-8 border-t border-gray-100 flex items-center justify-between">
+            <button id="markCurrentDoneBtn"
+              class="flex items-center gap-2 px-6 py-3 bg-green-50 text-green-700 hover:bg-green-600 hover:text-white border border-green-200 hover:border-transparent font-bold rounded-xl transition-all h-12">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+              </svg>
+              標記為已完成
+            </button>
+
+            <button id="nextStepBtn"
+              class="flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-all shadow-lg shadow-indigo-500/30 h-12 hidden">
+              前往下一步
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3">
+                </path>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div> <!-- end content-workflow -->
+
+  <!-- ================= CONTENT: AI 工具教學 ================= -->
+  <div id="content-ai-tools" class="hidden animate-[fadeIn_0.5s_ease-in-out]">
+    <div class="flex flex-col md:flex-row gap-6">
+      <div class="w-full md:w-64 shrink-0">
+        <div class="bg-white p-4 rounded-3xl shadow-sm border border-gray-100 sticky top-4">
+          <h3 class="font-bold text-gray-800 mb-4 px-2 text-sm uppercase tracking-wider">選擇教學模組</h3>
+          <div class="flex flex-col gap-2">
+            <button id="subtab-codex" class="w-full text-left px-4 py-3 rounded-xl font-bold bg-indigo-50 text-indigo-700 transition-all flex items-center justify-between">Codex 教學</button>
+            <button id="subtab-claude" class="w-full text-left px-4 py-3 rounded-xl font-bold bg-transparent text-gray-500 hover:bg-gray-50 transition-all flex items-center justify-between">Claude 教學<span class="bg-gray-100 text-gray-400 text-[10px] px-2 py-0.5 rounded-md">建置中</span></button>
+            <button id="subtab-openclaw-basic" class="w-full text-left px-4 py-3 rounded-xl font-bold bg-transparent text-gray-500 hover:bg-gray-50 transition-all flex items-center justify-between">OpenClaw 教學 (基礎)</button>
+            <button id="subtab-openclaw-adv" class="w-full text-left px-4 py-3 rounded-xl font-bold bg-transparent text-gray-500 hover:bg-gray-50 transition-all flex items-center justify-between">OpenClaw 教學 (進階)</button>
+          </div>
+        </div>
+      </div>
+      <div class="flex-1 bg-white p-6 md:p-10 rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+        <div id="codex-content" class="max-w-3xl mx-auto space-y-12 text-gray-700 block animate-[fadeIn_0.5s_ease-in-out]">
+          <div class="border-b border-gray-100 pb-8">
+            <h2 class="text-3xl font-black text-gray-900 mb-4">Codex 教學</h2>
+            <p class="text-lg text-gray-500 leading-relaxed">Codex 是 OpenAI 的 AI 程式開發助手。你可以把它想成一個會幫你「看懂程式、寫程式、改程式、跑測試、解釋錯誤」的 AI 助理。它不只是聊天回答問題，Codex 可以在專案中閱讀檔案、修改程式、執行指令。</p>
+          </div>
+          <section>
+            <h3 class="text-xl font-bold text-gray-800 mb-5 flex items-center gap-2"><span class="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center text-sm">🎯</span> Codex 適合誰？</h3>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div class="bg-gray-50 p-4 rounded-xl border border-gray-100"><div class="font-bold text-gray-800 mb-1">1. 完全新手</div><div class="text-sm text-gray-600">想學程式，不知道怎麼開始。</div></div>
+              <div class="bg-gray-50 p-4 rounded-xl border border-gray-100"><div class="font-bold text-gray-800 mb-1">2. 初學者</div><div class="text-sm text-gray-600">已學點 Python/JS，想加快。</div></div>
+              <div class="bg-gray-50 p-4 rounded-xl border border-gray-100"><div class="font-bold text-gray-800 mb-1">3. 非工程背景</div><div class="text-sm text-gray-600">做小工具、網頁或腳本。</div></div>
+              <div class="bg-gray-50 p-4 rounded-xl border border-gray-100"><div class="font-bold text-gray-800 mb-1">4. 開發者</div><div class="text-sm text-gray-600">幫忙除錯、重構、補文件。</div></div>
+            </div>
+          </section>
+          <section class="bg-yellow-50/50 border border-yellow-200 p-6 md:p-8 rounded-2xl relative">
+            <h3 class="text-lg font-bold text-yellow-800 mb-4 flex items-center gap-2">🔰 為什麼一定要匯入專案？</h3>
+            <p class="mb-4 text-gray-700 text-sm leading-relaxed">很多新手打開 Codex 會遇到要求匯入專案且不能跳過。因為 Codex <strong>會直接操作檔案</strong>，它必須知道工作目錄在哪。最簡單的解法是在桌面建立一個<strong>空資料夾</strong>並選取，接著要 Codex 幫你從零開始建立。</p>
+            <div class="mt-3 p-3 bg-white rounded-lg border border-gray-200"><code class="text-indigo-600 text-sm">我是一個新手，請幫我從零開始建立簡單專案，並教我每個檔案做什麼。</code></div>
+          </section>
+          <section>
+            <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2"><span class="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-sm">💻</span> 在哪裡用？</h3>
+            <p class="text-sm text-gray-600 mb-2">強烈推薦：<strong>先用 IDE 或 App，再碰 CLI。</strong></p>
+            <ul class="space-y-2 text-sm text-gray-600">
+              <li><strong>A. 在 IDE 中用 (推薦):</strong> 支援 VS Code、Cursor 等。</li>
+              <li><strong>B. 用 Codex app (推薦):</strong> 官方應用程式。</li>
+              <li><strong>C. CLI:</strong> 需要熟悉終端機操作。</li>
+            </ul>
+          </section>
+          <section>
+            <h3 class="text-xl font-bold text-gray-800 mb-4"><span class="text-lg">✨</span> 可以拿來做什麼？</h3>
+            <ul class="space-y-2 text-sm text-gray-600 list-decimal ml-6">
+              <li>生出程式草稿</li><li>看懂別人的程式</li><li>修 bug</li><li>整理與優化程式</li><li>完成一整段開發流程</li>
+            </ul>
+          </section>
+          <section>
+            <h3 class="text-xl font-bold text-gray-800 mb-4"><span class="text-lg">🚀</span> 新手上手 5 步驟</h3>
+            <ol class="space-y-2 text-sm text-gray-600 list-decimal ml-6">
+              <li><strong>準備小專案:</strong> 從小任務起手。</li>
+              <li><strong>需求講清楚:</strong> 講明語言、功能與風格。</li>
+              <li><strong>先看做什麼:</strong> 不急著收，看改了什麼檔案。</li>
+              <li><strong>要求它解釋:</strong> 追問為什麼這樣寫，讓它變成教練。</li>
+              <li><strong>小步修改:</strong> 不要一次改太多功能。</li>
+            </ol>
+          </section>
+        </div>
+        <div id="claude-content" class="hidden py-32 text-center animate-[fadeIn_0.5s_ease-in-out]">
+          <h3 class="text-2xl font-bold text-gray-800 mb-2">Claude 教學</h3>
+          <p class="text-gray-500">專業內容正在努力建置中，敬請期待！</p>
+        </div>
+
+        
+        <div id="openclaw-basic-content" class="hidden animate-[fadeIn_0.5s_ease-in-out]">
+          <div class="border-b border-gray-100 pb-8 mb-4">
+            <div class="inline-block bg-indigo-50 border border-indigo-100 text-indigo-700 rounded-full px-3 py-1 text-xs font-bold mb-4">新手入門</div>
+            <h2 class="text-3xl font-black text-gray-900 mb-4">OpenClaw 安裝與基礎設定</h2>
+            <p class="text-lg text-gray-500 leading-relaxed">從零開始，在約 5 分鐘內完成安裝、設定 AI 模型，並傳出你的第一則訊息。</p>
+          </div>
+          <div class="openclaw-raw">
+            <div class="page-wrap" style="padding-top: 10px;">
+              <nav class="toc" aria-label="目錄">
+    <h2>目錄</h2>
+    <ol>
+      <li><a href="#what-is">OpenClaw 是什麼？</a></li>
+      <li><a href="#prereqs">安裝前準備</a></li>
+      <li><a href="#install">安裝 OpenClaw</a></li>
+      <li><a href="#onboard">執行 Onboarding 向導</a></li>
+      <li><a href="#verify">確認 Gateway 正常運作</a></li>
+      <li><a href="#first-msg">傳送第一則訊息</a></li>
+      <li><a href="#next">下一步</a></li>
+      <li><a href="#faq">常見問題</a></li>
+    </ol>
+  </nav>
+
+  <!-- ── Section 1 ── -->
+  <section class="section" id="what-is">
+    <div class="section-header">
+      <div class="step-num">1</div>
+      <h2>OpenClaw 是什麼？</h2>
+    </div>
+
+    <p>
+      OpenClaw 是一個可以自己架設的個人 AI 助手平台。你把它安裝在自己的電腦上，
+      它會在背景啟動一個稱為 <strong>Gateway</strong> 的服務。
+    </p>
+
+    <p>Gateway 負責三件事：</p>
+    <ul>
+      <li>🤖 <strong>連接 AI 模型</strong>（Claude、GPT-4、Gemini 等）</li>
+      <li>💬 <strong>處理各種通訊管道</strong>（Telegram、WhatsApp、Discord 等）</li>
+      <li>🛠 <strong>執行工具</strong>（搜尋網頁、讀寫檔案、執行指令等）</li>
+    </ul>
+
+    <p>你的資料全部留在自己的電腦上，不需要透過任何第三方雲端服務。</p>
+
+    <div class="diagram">
+      <svg viewBox="0 0 660 220" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+        <!-- Background -->
+        <rect width="660" height="220" rx="12" fill="#f8fafc" stroke="#e2e8f0"/>
+
+        <!-- Gateway box -->
+        <rect x="245" y="75" width="170" height="70" rx="10" fill="#0f172a" stroke="#334155" stroke-width="1.5"/>
+        <text x="330" y="106" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">⚙️ Gateway</text>
+        <text x="330" y="124" text-anchor="middle" font-size="10.5" fill="#94a3b8">你的電腦上</text>
+
+        <!-- AI Models box -->
+        <rect x="36" y="75" width="160" height="70" rx="10" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5"/>
+        <text x="116" y="101" text-anchor="middle" font-size="12" font-weight="700" fill="#1e40af">🤖 AI 模型</text>
+        <text x="116" y="119" text-anchor="middle" font-size="10" fill="#3b82f6">Claude / GPT / Gemini</text>
+        <text x="116" y="134" text-anchor="middle" font-size="10" fill="#3b82f6">本地模型 (Ollama)</text>
+
+        <!-- Channels box -->
+        <rect x="464" y="75" width="160" height="70" rx="10" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+        <text x="544" y="101" text-anchor="middle" font-size="12" font-weight="700" fill="#166534">💬 通訊管道</text>
+        <text x="544" y="119" text-anchor="middle" font-size="10" fill="#16a34a">Telegram / WhatsApp</text>
+        <text x="544" y="134" text-anchor="middle" font-size="10" fill="#16a34a">Discord / Web UI</text>
+
+        <!-- Arrow AI → Gateway -->
+        <line x1="196" y1="110" x2="245" y2="110" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arr)"/>
+        <line x1="245" y1="110" x2="196" y2="110" stroke="#94a3b8" stroke-width="1.5" marker-start="url(#arr-rev)"/>
+
+        <!-- Arrow Gateway → Channels -->
+        <line x1="415" y1="110" x2="464" y2="110" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arr)"/>
+        <line x1="464" y1="110" x2="415" y2="110" stroke="#94a3b8" stroke-width="1.5" marker-start="url(#arr-rev)"/>
+
+        <!-- Label API -->
+        <text x="220" y="103" text-anchor="middle" font-size="9.5" fill="#64748b">API</text>
+        <!-- Label messages -->
+        <text x="440" y="103" text-anchor="middle" font-size="9.5" fill="#64748b">訊息</text>
+
+        <!-- Arrow defs -->
+        <defs>
+          <marker id="arr" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto">
+            <polygon points="0 0, 7 3.5, 0 7" fill="#94a3b8"/>
+          </marker>
+          <marker id="arr-rev" markerWidth="7" markerHeight="7" refX="2" refY="3.5" orient="auto">
+            <polygon points="7 0, 0 3.5, 7 7" fill="#94a3b8"/>
+          </marker>
+        </defs>
+
+        <!-- Caption -->
+        <text x="330" y="185" text-anchor="middle" font-size="11" fill="#94a3b8">Gateway 作為核心，連接 AI 能力與各通訊管道</text>
+      </svg>
+    </div>
+  </section>
+
+  <!-- ── Section 2 ── -->
+  <section class="section" id="prereqs">
+    <div class="section-header">
+      <div class="step-num">2</div>
+      <h2>安裝前準備</h2>
+    </div>
+
+    <h3>① Node.js</h3>
+    <p>OpenClaw 需要 Node.js。建議安裝 <strong>Node 24</strong>，最低支援 Node 22.14+。</p>
+    <p>打開終端機（Terminal），輸入以下指令確認你是否已經安裝：</p>
+    <pre><code>node --version</code></pre>
+    <p>
+      如果顯示版本號（例如 <code>v24.0.0</code>），代表已安裝。
+      如果出現錯誤，請先到 <a href="https://nodejs.org" target="_blank">nodejs.org</a> 下載安裝。
+    </p>
+
+    <div class="callout tip">
+      <span class="callout-icon">💡</span>
+      <div>
+        不確定什麼是終端機？<br>
+        <strong>macOS：</strong>按 Command＋空白鍵，搜尋「Terminal」，按 Enter 開啟。<br>
+        <strong>Windows：</strong>建議安裝 <a href="https://learn.microsoft.com/zh-tw/windows/wsl/install" target="_blank">WSL2</a>，再用 WSL 終端機操作，體驗更穩定。
+      </div>
+    </div>
+
+    <div class="terminal">
+      <div class="term-header">
+        <span class="term-dot r"></span><span class="term-dot y"></span><span class="term-dot g"></span>
+        <span class="term-title">Terminal</span>
+      </div>
+      <div class="term-body"><pre><code><span class="term-prompt">$</span> <span class="term-cmd">node --version</span>
+<span class="term-ok">v22.22.2</span></code></pre></div>
+    </div>
+
+    <h3>② AI 模型的 API Key</h3>
+    <p>
+      你需要至少一個 AI 模型供應商的帳號與 API Key。API Key 像是一組密碼，
+      讓 OpenClaw 可以使用那個模型的服務（通常依用量計費）。
+    </p>
+    <p>任選一個申請即可：</p>
+    <ul>
+      <li><strong>Anthropic（Claude）</strong>：<a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a></li>
+      <li><strong>OpenAI（GPT）</strong>：<a href="https://platform.openai.com" target="_blank">platform.openai.com</a></li>
+      <li><strong>Google（Gemini）</strong>：<a href="https://aistudio.google.com" target="_blank">aistudio.google.com</a></li>
+    </ul>
+    <p>Onboarding 過程中會請你輸入 API Key，先複製好備用。</p>
+
+    <div class="callout info">
+      <span class="callout-icon">✅</span>
+      <div>
+        準備好了嗎？確認清單：
+        <ul style="margin: 6px 0 0; padding-left: 18px;">
+          <li>Node.js 已安裝（<code>node --version</code> 有輸出版本號）</li>
+          <li>已取得至少一個 AI 供應商的 API Key</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Section 3 ── -->
+  <section class="section" id="install">
+    <div class="section-header">
+      <div class="step-num">3</div>
+      <h2>安裝 OpenClaw</h2>
+    </div>
+
+    <p>在終端機貼上對應你作業系統的指令，然後按 Enter：</p>
+
+    <div class="tabs" id="tabs-install">
+      <div class="tab-btns">
+        <button class="tab-btn active" onclick="switchTab('install','mac')">macOS / Linux</button>
+        <button class="tab-btn" onclick="switchTab('install','win')">Windows (PowerShell)</button>
+      </div>
+      <div class="tab-panel active" id="install-mac">
+        <pre><code>curl -fsSL https://openclaw.ai/install.sh | bash</code></pre>
+      </div>
+      <div class="tab-panel" id="install-win">
+        <pre><code>iwr -useb https://openclaw.ai/install.ps1 | iex</code></pre>
+      </div>
+    </div>
+
+    <p>安裝腳本會自動偵測你的環境，並完成所有必要的安裝步驟。過程大約 1～2 分鐘。</p>
+
+
+
+    <h3>確認安裝成功</h3>
+    <p>安裝完成後，執行以下指令確認 CLI 可以使用：</p>
+    <pre><code>openclaw --version</code></pre>
+    <p>看到版本號（例如 <code>openclaw/1.x.x</code>）就代表成功了。</p>
+
+    <div class="callout warn">
+      <span class="callout-icon">⚠️</span>
+      <div>
+        <strong>看到「openclaw: command not found」？</strong><br>
+        這是因為 npm 的全域安裝路徑不在系統的 PATH 裡。執行以下指令，然後重新開啟終端機：
+        <pre style="margin-top: 10px;"><code>export PATH="$(npm prefix -g)/bin:$PATH"</code></pre>
+        要讓設定永久生效，把這行加進 <code>~/.zshrc</code> 或 <code>~/.bashrc</code>。
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Section 4 ── -->
+  <section class="section" id="onboard">
+    <div class="section-header">
+      <div class="step-num">4</div>
+      <h2>執行 Onboarding 向導</h2>
+    </div>
+
+    <p>Onboarding 向導會一步一步引導你完成所有基本設定。在終端機執行：</p>
+    <pre><code>openclaw onboard --install-daemon</code></pre>
+
+    <div class="callout tip">
+      <span class="callout-icon">💡</span>
+      <div>
+        <strong>--install-daemon 是什麼？</strong><br>
+        加上這個參數，Gateway 服務會在你的電腦開機時自動啟動，
+        你不需要每次手動開啟它。建議第一次安裝都加上。
+      </div>
+    </div>
+
+    <h3>向導步驟說明</h3>
+    <p>向導會依序問你幾個問題，以下是每個步驟的說明：</p>
+
+    <ol class="steps">
+      <li>
+        <strong>QuickStart 還是 Advanced？</strong><br>
+        選 <strong>QuickStart</strong>。它使用預設值，適合大部分情況。
+        Advanced 是給有特殊需求的進階用戶。
+
+      </li>
+      <li>
+        <strong>選擇 AI 模型供應商 + 輸入 API Key</strong><br>
+        用方向鍵選擇你的供應商（例如 Anthropic），然後輸入你的 API Key。
+        輸入時畫面不會顯示字元（這是正常的保護機制）。
+
+      </li>
+      <li>
+        <strong>Workspace 路徑</strong><br>
+        這是 AI 助手存放檔案的工作目錄。預設是 <code>~/.openclaw/workspace</code>，
+        直接按 Enter 接受即可。
+      </li>
+      <li>
+        <strong>Gateway 設定</strong><br>
+        預設 port 是 <code>18789</code>。除非你有特殊需求，直接按 Enter 略過所有選項。
+      </li>
+      <li>
+        <strong>通訊管道設定（可略過）</strong><br>
+        這裡可以設定 Telegram、WhatsApp 等通訊管道。
+        第一次可以直接跳過，等基本設定完成後再回來設定。
+      </li>
+      <li>
+        <strong>安裝 Daemon</strong><br>
+        確認要安裝背景服務，按下 Enter 或選「Yes」。
+      </li>
+      <li>
+        <strong>健康檢查</strong><br>
+        向導會自動啟動 Gateway 並確認一切正常。
+
+      </li>
+    </ol>
+
+    <p>整個過程大約 2 分鐘。</p>
+  </section>
+
+  <!-- ── Section 5 ── -->
+  <section class="section" id="verify">
+    <div class="section-header">
+      <div class="step-num">5</div>
+      <h2>確認 Gateway 正常運作</h2>
+    </div>
+
+    <p>Onboarding 結束後，再次確認 Gateway 的狀態：</p>
+    <pre><code>openclaw gateway status</code></pre>
+
+    <p>正常運作的畫面會顯示：</p>
+    <pre><code>Runtime: running
+RPC probe: ok</code></pre>
+
+    <div class="terminal">
+      <div class="term-header">
+        <span class="term-dot r"></span><span class="term-dot y"></span><span class="term-dot g"></span>
+        <span class="term-title">Terminal</span>
+      </div>
+      <div class="term-body"><pre><code><span class="term-prompt">$</span> <span class="term-cmd">openclaw gateway status</span>
+<span class="term-out">Service:     LaunchAgent (loaded)</span>
+<span class="term-out">Gateway:     bind=loopback, port=18789</span>
+<span class="term-out">Dashboard:   http://127.0.0.1:18789/</span>
+<span class="term-out">---</span>
+<span class="term-ok">Runtime:     running (pid 462)</span>
+<span class="term-ok">RPC probe:   ok</span></code></pre></div>
+    </div>
+
+    <div class="callout warn">
+      <span class="callout-icon">⚠️</span>
+      <div>
+        <strong>Gateway 沒有啟動？</strong><br>
+        手動啟動它：
+        <pre style="margin-top: 10px;"><code>openclaw gateway start</code></pre>
+        如果還是有問題，執行診斷指令：
+        <pre style="margin-top: 6px;"><code>openclaw doctor</code></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Section 6 ── -->
+  <section class="section" id="first-msg">
+    <div class="section-header">
+      <div class="step-num">6</div>
+      <h2>傳送第一則訊息</h2>
+    </div>
+
+    <p>在終端機執行以下指令，開啟瀏覽器控制介面（Dashboard）：</p>
+    <pre><code>openclaw dashboard</code></pre>
+
+    <p>瀏覽器會自動打開 OpenClaw 的 Control UI。</p>
+
+
+
+    <p>在畫面下方的聊天輸入框輸入任何訊息（例如「你好，請自我介紹一下」），然後按 Enter 送出。</p>
+
+
+
+    <div class="callout info">
+      <span class="callout-icon">🎉</span>
+      <div>
+        <strong>AI 回覆了嗎？</strong><br>
+        恭喜！你的 OpenClaw 已經成功運作了。
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Section 7 ── -->
+  <section class="section" id="next">
+    <div class="section-header">
+      <div class="step-num">7</div>
+      <h2>下一步</h2>
+    </div>
+
+    <p>基礎設定完成後，可以繼續探索以下功能：</p>
+
+    <div class="cards">
+      <a class="card" href="https://docs.openclaw.ai/channels/telegram" target="_blank">
+        <div class="card-icon">📱</div>
+        <h4>連接 Telegram</h4>
+        <p>最快速的通訊管道設定，只需要一個 Bot Token。</p>
+      </a>
+      <a class="card" href="https://docs.openclaw.ai/channels" target="_blank">
+        <div class="card-icon">💬</div>
+        <h4>其他通訊管道</h4>
+        <p>WhatsApp、Discord、iMessage、Signal 等。</p>
+      </a>
+      <a class="card" href="https://clawhub.ai" target="_blank">
+        <div class="card-icon">🧩</div>
+        <h4>安裝 Skills</h4>
+        <p>擴充 AI 能力的模組，例如天氣查詢、網頁搜尋。</p>
+      </a>
+      <a class="card" href="https://docs.openclaw.ai/gateway/configuration" target="_blank">
+        <div class="card-icon">⚙️</div>
+        <h4>進階設定</h4>
+        <p>調整模型、工具權限、Sandbox 等設定。</p>
+      </a>
+    </div>
+  </section>
+
+  <!-- ── FAQ ── -->
+  <section class="section" id="faq">
+    <div class="section-header">
+      <div class="step-num" style="background:#64748b;">？</div>
+      <h2>常見問題</h2>
+    </div>
+
+    <details>
+      <summary>安裝後 <code>openclaw</code> 指令找不到怎麼辦？</summary>
+      <div class="faq-body">
+        <p>這通常是 npm 全域安裝路徑不在 PATH 裡的問題。執行：</p>
+        <pre><code>npm prefix -g</code></pre>
+        <p>把輸出路徑（加上 <code>/bin</code>）加進 PATH，例如：</p>
+        <pre><code>export PATH="/Users/你的名字/.nvm/versions/node/v24.0.0/bin:$PATH"</code></pre>
+        <p>把這行加進 <code>~/.zshrc</code>（macOS）或 <code>~/.bashrc</code>（Linux），然後重新開啟終端機。</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>Onboarding 可以重跑嗎？</summary>
+      <div class="faq-body">
+        <p>可以，重跑不會清除現有設定，除非你明確選擇 Reset。</p>
+        <pre><code>openclaw onboard</code></pre>
+      </div>
+    </details>
+
+    <details>
+      <summary>如何重新設定某個項目（例如 API Key）？</summary>
+      <div class="faq-body">
+        <p>使用 configure 指令重新進行設定：</p>
+        <pre><code>openclaw configure</code></pre>
+      </div>
+    </details>
+
+    <details>
+      <summary>Gateway 啟動後我可以關掉終端機嗎？</summary>
+      <div class="faq-body">
+        <p>如果你在 Onboarding 時有安裝 Daemon（<code>--install-daemon</code>），可以的。
+        Gateway 會在背景持續運作，關掉終端機不影響。</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>支援哪些 AI 模型？</summary>
+      <div class="faq-body">
+        <p>支援 Anthropic（Claude）、OpenAI（GPT）、Google Gemini，
+        以及任何相容 OpenAI API 格式的模型，包含本地模型（如 Ollama）。</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>我的資料安全嗎？</summary>
+      <div class="faq-body">
+        <p>OpenClaw 是自架服務，資料儲存在你自己的電腦上。
+        AI 模型的 API 請求會送到你選擇的供應商（例如 Anthropic），
+        受該供應商的隱私政策保護。OpenClaw 本身不收集你的對話資料。</p>
+      </div>
+    </details>
+  </section>
+
+  <!-- ── Footer ── -->
+  <footer>
+    <p>
+      OpenClaw 官方文件：<a href="https://docs.openclaw.ai" target="_blank">docs.openclaw.ai</a>　
+      社群 Discord：<a href="https://discord.com/invite/clawd" target="_blank">discord.com/invite/clawd</a>
+    </p>
+    <p style="margin-top: 8px; color: #cbd5e1;">本文件最後更新：2026-04-02</p>
+  </footer>
+            </div>
+          </div>
+        </div>
+
+        <div id="openclaw-adv-content" class="hidden animate-[fadeIn_0.5s_ease-in-out]">
+          <div class="border-b border-gray-100 pb-8 mb-4">
+            <div class="inline-block bg-indigo-50 border border-indigo-100 text-indigo-700 rounded-full px-3 py-1 text-xs font-bold mb-4">進階設定</div>
+            <h2 class="text-3xl font-black text-gray-900 mb-4">OpenClaw 進階設定指南</h2>
+            <p class="text-lg text-gray-500 leading-relaxed">完成基礎安裝後的下一步：通訊管道、AI 模型、安全設定、Skills、排程與遠端連線。</p>
+          </div>
+          <div class="openclaw-raw">
+            <div class="page-wrap" style="padding-top: 10px;">
+<!-- ── TOC ── -->
+  <nav class="toc" aria-label="目錄">
+    <h2>目錄</h2>
+    <ol>
+      <li><a href="#channels">通訊管道設定</a></li>
+      <li><a href="#models">AI 模型管理</a></li>
+      <li><a href="#security">安全與存取控制</a></li>
+      <li><a href="#skills">Skills 管理</a></li>
+      <li><a href="#gateway">Gateway 進階設定</a></li>
+      <li><a href="#workspace">Workspace 設定</a></li>
+      <li><a href="#heartbeat">Heartbeat 與排程</a></li>
+      <li><a href="#remote">遠端連線</a></li>
+    </ol>
+  </nav>
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- 1. 通訊管道 -->
+  <!-- ══════════════════════════════════════════ -->
+  <section class="section" id="channels">
+    <div class="section-header">
+      <div class="step-num">1</div>
+      <h2>通訊管道設定</h2>
+    </div>
+
+    <p>
+      OpenClaw 支援多種通訊管道，最常用的是 Telegram。
+      管道設定都儲存在 <code>openclaw.json</code> 的 <code>channels</code> 區段。
+    </p>
+
+    <!-- Telegram -->
+    <h3>📱 Telegram</h3>
+    <p>Telegram 需要一個 Bot Token。如果還沒建立 Bot，先到 <a href="https://t.me/BotFather" target="_blank">@BotFather</a> 執行 <code>/newbot</code>，取得 Token 後再繼續。</p>
+
+    <p><strong>設定 Bot Token：</strong></p>
+    <div class="terminal">
+      <div class="term-header">
+        <span class="term-dot r"></span><span class="term-dot y"></span><span class="term-dot g"></span>
+        <span class="term-title">Terminal</span>
+      </div>
+      <div class="term-body"><pre><code><span class="term-prompt">$</span> <span class="term-cmd">openclaw config set channels.telegram.botToken YOUR_TOKEN_HERE</span>
+<span class="term-ok">✓ channels.telegram.botToken updated</span>
+<span class="term-prompt">$</span> <span class="term-cmd">openclaw gateway restart</span>
+<span class="term-ok">✓ Gateway restarted</span></code></pre></div>
+    </div>
+
+    <p>建議用環境變數存放 Token，避免明文寫入 config 檔：</p>
+    <div class="terminal">
+      <div class="term-header">
+        <span class="term-dot r"></span><span class="term-dot y"></span><span class="term-dot g"></span>
+        <span class="term-title">Terminal</span>
+      </div>
+      <div class="term-body"><pre><code><span class="term-prompt">$</span> <span class="term-cmd">openclaw config set channels.telegram.botToken \</span>
+    <span class="term-cmd">--ref-provider default --ref-source env --ref-id TELEGRAM_BOT_TOKEN</span>
+<span class="term-comment"># 把 TELEGRAM_BOT_TOKEN=xxx 加進 ~/.zshrc 或 ~/.bashrc</span></code></pre></div>
+    </div>
+
+    <h3>群組策略（groupPolicy）</h3>
+    <p>控制 Bot 在群組中的行為：</p>
+    <table class="config-table">
+      <thead><tr><th>值</th><th>說明</th></tr></thead>
+      <tbody>
+        <tr><td><span class="badge-val">open</span></td><td>允許所有群組訊息（不建議，可能被陌生人觸發）</td></tr>
+        <tr><td><span class="badge-val">allowlist</span></td><td>只允許 <code>groupAllowFrom</code> 清單中的群組/用戶（預設值，最安全）</td></tr>
+        <tr><td><span class="badge-val">deny</span></td><td>完全拒絕群組訊息</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout warn">
+      <span class="callout-icon">⚠️</span>
+      <div>
+        <strong>設了 allowlist 但沒加任何 ID？</strong><br>
+        所有群組訊息會被靜默丟棄。用 <code>openclaw directory self</code> 查自己的 ID，
+        或 <code>openclaw doctor</code> 會提示你這個問題。
+      </div>
+    </div>
+
+    <p><strong>加入允許的群組 / 用戶 ID：</strong></p>
+    <pre><code>openclaw config set channels.telegram.groupAllowFrom '["123456789","group_id"]' --strict-json</code></pre>
+
+    <h3>dmPolicy（私訊策略）</h3>
+    <table class="config-table">
+      <thead><tr><th>值</th><th>說明</th></tr></thead>
+      <tbody>
+        <tr><td><span class="badge-val">open</span></td><td>任何人都可以私訊 Bot</td></tr>
+        <tr><td><span class="badge-val">pairing</span></td><td>需要先完成配對才能使用（預設）</td></tr>
+        <tr><td><span class="badge-val">deny</span></td><td>拒絕所有私訊</td></tr>
+      </tbody>
+    </table>
+
+    <h3>💬 其他管道</h3>
+    <p>其他管道需透過互動式設定向導來設定（Token/Cookie 等驗證流程較複雜）：</p>
+    <pre><code>openclaw configure</code></pre>
+    <p>或針對特定管道：</p>
+    <pre><code>openclaw channels login --channel discord
+openclaw channels login --channel whatsapp</code></pre>
+
+    <div class="callout tip">
+      <span class="callout-icon">💡</span>
+      <div>
+        查詢已連線管道的狀態：
+        <pre style="margin-top: 8px;"><code>openclaw status</code></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- 2. AI 模型管理 -->
+  <!-- ══════════════════════════════════════════ -->
+  <section class="section" id="models">
+    <div class="section-header">
+      <div class="step-num">2</div>
+      <h2>AI 模型管理</h2>
+    </div>
+
+    <h3>查看可用模型</h3>
+    <div class="terminal">
+      <div class="term-header">
+        <span class="term-dot r"></span><span class="term-dot y"></span><span class="term-dot g"></span>
+        <span class="term-title">Terminal</span>
+      </div>
+      <div class="term-body"><pre><code><span class="term-prompt">$</span> <span class="term-cmd">openclaw models scan</span>
+<span class="term-out">Scanning configured providers…</span>
+<span class="term-ok">✓ anthropic  claude-sonnet-4-6  (alias: sonnet)</span>
+<span class="term-ok">✓ anthropic  claude-opus-4-6    (alias: opus)</span>
+<span class="term-ok">✓ anthropic  claude-haiku-4-5</span></code></pre></div>
+    </div>
+
+    <h3>切換預設模型</h3>
+    <p>預設模型設定在 <code>agents.defaults.model.primary</code>：</p>
+    <pre><code>openclaw config set agents.defaults.model.primary anthropic/claude-opus-4-6</code></pre>
+    <p>也可以用別名（alias）：</p>
+    <pre><code>openclaw config set agents.defaults.model.primary opus</code></pre>
+
+    <h3>模型別名</h3>
+    <p>系統內建的常用別名：</p>
+    <table class="config-table">
+      <thead><tr><th>別名</th><th>對應模型</th></tr></thead>
+      <tbody>
+        <tr><td><span class="badge-val">sonnet</span></td><td>anthropic/claude-sonnet-4-6</td></tr>
+        <tr><td><span class="badge-val">opus</span></td><td>anthropic/claude-opus-4-6</td></tr>
+      </tbody>
+    </table>
+    <p>自訂別名：</p>
+    <pre><code>openclaw config set agents.defaults.models.openai/gpt-4o.alias gpt</code></pre>
+
+    <h3>Fallback 模型</h3>
+    <p>當主要模型失敗時，OpenClaw 會依序嘗試 fallback 清單：</p>
+    <pre><code>openclaw config set agents.defaults.model.fallbacks \
+  '["anthropic/claude-opus-4-6","anthropic/claude-haiku-4-5"]' --strict-json</code></pre>
+
+    <h3>新增供應商（多模型並用）</h3>
+    <p>透過互動式向導新增 API Key：</p>
+    <pre><code>openclaw configure --section model</code></pre>
+
+    <h3>本地模型（Ollama）</h3>
+    <p>先確認 Ollama 已在本機執行（預設 <code>http://localhost:11434</code>），再新增：</p>
+    <pre><code>openclaw configure --section model</code></pre>
+    <p>選擇 <strong>Ollama / Compatible OpenAI API</strong>，輸入 base URL 即可。</p>
+
+    <div class="callout info">
+      <span class="callout-icon">✅</span>
+      <div>
+        使用本地模型時，對話不會送到任何雲端服務，完全離線運作。
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- 3. 安全與存取控制 -->
+  <!-- ══════════════════════════════════════════ -->
+  <section class="section" id="security">
+    <div class="section-header">
+      <div class="step-num">3</div>
+      <h2>安全與存取控制</h2>
+    </div>
+
+    <h3>🔒 Exec 工具安全模式（Sandbox）</h3>
+    <p>控制 AI 是否可以執行 shell 指令，分為三個層級：</p>
+    <table class="config-table">
+      <thead><tr><th>模式</th><th>說明</th></tr></thead>
+      <tbody>
+        <tr><td><span class="badge-val">deny</span></td><td>完全禁止執行任何 shell 指令（最安全）</td></tr>
+        <tr><td><span class="badge-val">allowlist</span></td><td>只允許白名單內的指令（需手動審批新指令）</td></tr>
+        <tr><td><span class="badge-val">full</span></td><td>允許執行所有指令（開發者模式，需謹慎）</td></tr>
+      </tbody>
+    </table>
+    <pre><code>openclaw config set agents.defaults.exec.security allowlist</code></pre>
+
+    <div class="callout danger">
+      <span class="callout-icon">🚨</span>
+      <div>
+        <strong>full 模式有風險</strong><br>
+        設為 full 時，AI 可以執行任意 shell 指令，包含刪除檔案、發送網路請求等。
+        只在你完全信任 AI 行為，且了解風險時使用。
+      </div>
+    </div>
+
+    <h3>審批機制（Approvals）</h3>
+    <p>在 allowlist 模式下，遇到未知指令時，AI 會暫停並等待你的審批：</p>
+    <div class="terminal">
+      <div class="term-header">
+        <span class="term-dot r"></span><span class="term-dot y"></span><span class="term-dot g"></span>
+        <span class="term-title">Terminal</span>
+      </div>
+      <div class="term-body"><pre><code><span class="term-out"># 查看待審批的指令</span>
+<span class="term-prompt">$</span> <span class="term-cmd">openclaw approvals list</span>
+
+<span class="term-out"># 單次允許</span>
+<span class="term-prompt">$</span> <span class="term-cmd">openclaw approvals allow-once &lt;id&gt;</span>
+
+<span class="term-out"># 永久加入白名單</span>
+<span class="term-prompt">$</span> <span class="term-cmd">openclaw approvals allow-always &lt;id&gt;</span></code></pre></div>
+    </div>
+
+    <h3>Gateway Bind 設定</h3>
+    <p>控制 Gateway 對外的可見範圍：</p>
+    <table class="config-table">
+      <thead><tr><th>設定</th><th>說明</th></tr></thead>
+      <tbody>
+        <tr><td><span class="badge-val">loopback</span></td><td>只允許本機連線（127.0.0.1），最安全（預設）</td></tr>
+        <tr><td><span class="badge-val">local</span></td><td>允許區域網路連線</td></tr>
+        <tr><td><span class="badge-val">all</span></td><td>對所有介面開放（需搭配防火牆）</td></tr>
+      </tbody>
+    </table>
+    <pre><code>openclaw config set gateway.bind loopback</code></pre>
+
+    <h3>API Key 安全存放</h3>
+    <p>避免 API Key 明文寫入設定檔，改用環境變數參照：</p>
+    <div class="tabs" id="tabs-apikey">
+      <div class="tab-btns">
+        <button class="tab-btn active" onclick="switchTab('apikey','env')">環境變數（推薦）</button>
+        <button class="tab-btn" onclick="switchTab('apikey','file')">Secret 檔案</button>
+      </div>
+      <div class="tab-panel active" id="apikey-env">
+        <pre><code># ~/.zshrc 或 ~/.bashrc 加入：
+export ANTHROPIC_API_KEY="sk-ant-..."
+export TELEGRAM_BOT_TOKEN="bot..."
+
+# 在 config 中參照環境變數
+openclaw config set secrets.providers.default \
+  --provider-source env \
+  --provider-mode flat</code></pre>
+      </div>
+      <div class="tab-panel" id="apikey-file">
+        <pre><code># 建立 JSON 格式的 secret 檔案
+{
+  "ANTHROPIC_API_KEY": "sk-ant-...",
+  "TELEGRAM_BOT_TOKEN": "bot..."
+}
+
+# 在 config 中參照
+openclaw config set secrets.providers.vault \
+  --provider-source file \
+  --provider-path /etc/openclaw/secrets.json \
+  --provider-mode json</code></pre>
+      </div>
+    </div>
+
+    <h3>安全稽核</h3>
+    <pre><code>openclaw security audit --deep</code></pre>
+  </section>
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- 4. Skills 管理 -->
+  <!-- ══════════════════════════════════════════ -->
+  <section class="section" id="skills">
+    <div class="section-header">
+      <div class="step-num">4</div>
+      <h2>Skills 管理</h2>
+    </div>
+
+    <p>
+      Skills 是擴充 AI 能力的模組，例如天氣查詢、網頁搜尋、TTS 語音合成等。
+      官方 Skill 庫在 <a href="https://clawhub.ai" target="_blank">clawhub.ai</a>。
+    </p>
+
+    <h3>查看已安裝的 Skills</h3>
+    <div class="terminal">
+      <div class="term-header">
+        <span class="term-dot r"></span><span class="term-dot y"></span><span class="term-dot g"></span>
+        <span class="term-title">Terminal</span>
+      </div>
+      <div class="term-body"><pre><code><span class="term-prompt">$</span> <span class="term-cmd">openclaw skills list</span>
+<span class="term-ok">✓ ready        ☔ weather       Get weather forecasts via wttr.in</span>
+<span class="term-ok">✓ ready        🔐 healthcheck  Security hardening checks</span>
+<span class="term-warn">△ needs setup  📱 wacli         WhatsApp CLI integration</span>
+<span class="term-warn">△ needs setup  📸 ffmpeg        Video/audio processing</span></code></pre></div>
+    </div>
+
+    <h3>搜尋 ClawHub Skills</h3>
+    <pre><code>openclaw skills search &lt;關鍵字&gt;</code></pre>
+
+    <h3>安裝 Skill</h3>
+    <pre><code>openclaw skills install &lt;skill-name&gt;</code></pre>
+
+    <h3>更新 Skills</h3>
+    <pre><code># 更新全部
+openclaw skills update
+
+# 更新特定 Skill
+openclaw skills update &lt;skill-name&gt;</code></pre>
+
+    <h3>Skill 資料夾結構</h3>
+    <p>Skills 預設安裝在：</p>
+    <pre><code>~/.nvm/versions/node/v22.22.2/lib/node_modules/openclaw/skills/</code></pre>
+    <p>每個 Skill 都有一個 <code>SKILL.md</code>，說明它的用途與設定方式。
+    在對話中，AI 會自動依情境載入對應的 Skill。</p>
+
+    <div class="callout tip">
+      <span class="callout-icon">💡</span>
+      <div>
+        <strong>「needs setup」是什麼意思？</strong><br>
+        代表該 Skill 需要額外的依賴（例如安裝 CLI 工具或設定 API Key）才能使用。
+        查看 Skill 的 <code>SKILL.md</code> 可以找到設定說明：
+        <pre style="margin-top: 8px;"><code>openclaw skills info &lt;skill-name&gt;</code></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- 5. Gateway 進階設定 -->
+  <!-- ══════════════════════════════════════════ -->
+  <section class="section" id="gateway">
+    <div class="section-header">
+      <div class="step-num">5</div>
+      <h2>Gateway 進階設定</h2>
+    </div>
+
+    <h3>常用指令</h3>
+    <div class="terminal">
+      <div class="term-header">
+        <span class="term-dot r"></span><span class="term-dot y"></span><span class="term-dot g"></span>
+        <span class="term-title">Terminal</span>
+      </div>
+      <div class="term-body"><pre><code><span class="term-out"># 狀態查詢</span>
+<span class="term-prompt">$</span> <span class="term-cmd">openclaw gateway status</span>
+<span class="term-ok">Runtime:     running (pid 462)</span>
+<span class="term-ok">RPC probe:   ok</span>
+
+<span class="term-out"># 啟動 / 停止 / 重啟</span>
+<span class="term-prompt">$</span> <span class="term-cmd">openclaw gateway start</span>
+<span class="term-prompt">$</span> <span class="term-cmd">openclaw gateway stop</span>
+<span class="term-prompt">$</span> <span class="term-cmd">openclaw gateway restart</span>
+
+<span class="term-out"># 強制重啟（清除 port 佔用）</span>
+<span class="term-prompt">$</span> <span class="term-cmd">openclaw gateway start --force</span></code></pre></div>
+    </div>
+
+    <h3>Port 設定</h3>
+    <p>預設 Port 是 <code>18789</code>，修改後需重啟：</p>
+    <pre><code>openclaw config set gateway.port 18790
+openclaw gateway restart</code></pre>
+
+    <h3>Daemon 管理</h3>
+    <p>Gateway 以系統服務（Daemon）形式在背景運作：</p>
+    <table class="config-table">
+      <thead><tr><th>平台</th><th>服務類型</th><th>設定檔路徑</th></tr></thead>
+      <tbody>
+        <tr><td>macOS</td><td>LaunchAgent</td><td><code>~/Library/LaunchAgents/ai.openclaw.gateway.plist</code></td></tr>
+        <tr><td>Linux</td><td>systemd user service</td><td><code>~/.config/systemd/user/openclaw.service</code></td></tr>
+        <tr><td>Windows</td><td>Task Scheduler / NSSM</td><td>—</td></tr>
+      </tbody>
+    </table>
+    <pre><code># 重新安裝 Daemon（設定有變更時）
+openclaw gateway install-daemon
+
+# 移除 Daemon（不刪資料）
+openclaw gateway uninstall-daemon</code></pre>
+
+    <h3>查看日誌</h3>
+    <div class="terminal">
+      <div class="term-header">
+        <span class="term-dot r"></span><span class="term-dot y"></span><span class="term-dot g"></span>
+        <span class="term-title">Terminal</span>
+      </div>
+      <div class="term-body"><pre><code><span class="term-out"># 即時追蹤 Gateway 日誌</span>
+<span class="term-prompt">$</span> <span class="term-cmd">openclaw logs</span>
+
+<span class="term-out"># 日誌檔案位置</span>
+<span class="term-prompt">$</span> <span class="term-cmd">ls /tmp/openclaw/</span>
+<span class="term-out">openclaw-2026-04-02.log</span></code></pre></div>
+    </div>
+
+    <h3>診斷工具（Doctor）</h3>
+    <p>遇到問題時，先跑 doctor：</p>
+    <div class="terminal">
+      <div class="term-header">
+        <span class="term-dot r"></span><span class="term-dot y"></span><span class="term-dot g"></span>
+        <span class="term-title">Terminal</span>
+      </div>
+      <div class="term-body"><pre><code><span class="term-prompt">$</span> <span class="term-cmd">openclaw doctor</span>
+<span class="term-ok">◇  Gateway runtime ─ ok</span>
+<span class="term-ok">◇  Security ─ No channel security warnings detected.</span>
+<span class="term-warn">◇  Memory search ─ No embedding provider configured.</span>
+
+<span class="term-out"># 自動修復可修復的問題</span>
+<span class="term-prompt">$</span> <span class="term-cmd">openclaw doctor --fix</span></code></pre></div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- 6. Workspace 設定 -->
+  <!-- ══════════════════════════════════════════ -->
+  <section class="section" id="workspace">
+    <div class="section-header">
+      <div class="step-num">6</div>
+      <h2>Workspace 設定</h2>
+    </div>
+
+    <p>
+      Workspace 是 AI 助手的「工作目錄」，預設位於 <code>~/.openclaw/workspace</code>。
+      AI 讀寫的所有檔案都在這裡，也是記憶體系統的根目錄。
+    </p>
+
+    <h3>核心檔案角色</h3>
+    <table class="config-table">
+      <thead><tr><th>檔案</th><th>說明</th></tr></thead>
+      <tbody>
+        <tr><td><code>SOUL.md</code></td><td>定義 AI 的個性、風格與核心原則（每次啟動都會讀取）</td></tr>
+        <tr><td><code>USER.md</code></td><td>你的基本資訊：姓名、時區、偏好語言、備注</td></tr>
+        <tr><td><code>MEMORY.md</code></td><td>長期記憶，AI 在主要會話中讀寫的持久記憶</td></tr>
+        <tr><td><code>AGENTS.md</code></td><td>AI 的行為規則與工作指引（類似系統 Prompt 的補充）</td></tr>
+        <tr><td><code>TOOLS.md</code></td><td>你的環境筆記（SSH、攝影機、TTS 偏好等）</td></tr>
+        <tr><td><code>HEARTBEAT.md</code></td><td>定義心跳輪詢時的檢查任務清單</td></tr>
+        <tr><td><code>memory/YYYY-MM-DD.md</code></td><td>每日原始日誌，AI 用來記錄當天事件</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout info">
+      <span class="callout-icon">✅</span>
+      <div>
+        <strong>客製化 AI 行為的最快方式：</strong><br>
+        直接編輯 <code>SOUL.md</code> 或 <code>AGENTS.md</code>，下次對話就會生效，不需要重啟 Gateway。
+      </div>
+    </div>
+
+    <h3>修改 Workspace 路徑</h3>
+    <pre><code>openclaw config set agents.defaults.workspace /path/to/your/workspace
+openclaw gateway restart</code></pre>
+
+    <h3>多 Agent / 多 Workspace</h3>
+    <p>可以建立多個隔離的 Agent，每個有自己的 workspace 和 auth：</p>
+    <pre><code># 建立新 Agent
+openclaw agents add my-work-agent
+
+# 列出所有 Agents
+openclaw agents list
+
+# 指定 Agent 跑一次
+openclaw agent --agent my-work-agent --message "幫我整理今天的待辦事項"</code></pre>
+  </section>
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- 7. Heartbeat 與排程 -->
+  <!-- ══════════════════════════════════════════ -->
+  <section class="section" id="heartbeat">
+    <div class="section-header">
+      <div class="step-num">7</div>
+      <h2>Heartbeat 與排程</h2>
+    </div>
+
+    <h3>Heartbeat（心跳輪詢）</h3>
+    <p>
+      Gateway 每隔一段時間（預設 30 分鐘）會自動喚醒 AI，讓它執行 <code>HEARTBEAT.md</code> 中定義的任務。
+      這是讓 AI 主動觀察、主動通知你的機制。
+    </p>
+
+    <div class="diagram">
+      <svg viewBox="0 0 600 140" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+        <rect width="600" height="140" rx="12" fill="#f8fafc" stroke="#e2e8f0"/>
+        <!-- Nodes -->
+        <rect x="20"  y="50" width="110" height="44" rx="8" fill="#0f172a" stroke="#334155"/>
+        <text x="75"  y="77" text-anchor="middle" font-size="12" fill="#fff">Gateway</text>
+
+        <rect x="180" y="50" width="110" height="44" rx="8" fill="#eff6ff" stroke="#bfdbfe"/>
+        <text x="235" y="70" text-anchor="middle" font-size="11" fill="#1e40af">AI 助手</text>
+        <text x="235" y="84" text-anchor="middle" font-size="9.5" fill="#3b82f6">(HEARTBEAT.md)</text>
+
+        <rect x="340" y="50" width="110" height="44" rx="8" fill="#f0fdf4" stroke="#bbf7d0"/>
+        <text x="395" y="70" text-anchor="middle" font-size="11" fill="#166534">你的管道</text>
+        <text x="395" y="84" text-anchor="middle" font-size="9.5" fill="#16a34a">Telegram 等</text>
+
+        <rect x="500" y="50" width="80" height="44" rx="8" fill="#fffbeb" stroke="#fde68a"/>
+        <text x="540" y="70" text-anchor="middle" font-size="11" fill="#92400e">你</text>
+        <text x="540" y="84" text-anchor="middle" font-size="9.5" fill="#b45309">📱</text>
+
+        <!-- Arrows -->
+        <line x1="130" y1="72" x2="180" y2="72" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#a)"/>
+        <line x1="290" y1="72" x2="340" y2="72" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#a)"/>
+        <line x1="450" y1="72" x2="500" y2="72" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#a)"/>
+
+        <text x="155" y="62" text-anchor="middle" font-size="9" fill="#64748b">每 30m</text>
+        <text x="315" y="62" text-anchor="middle" font-size="9" fill="#64748b">有事才傳</text>
+
+        <!-- Caption -->
+        <text x="300" y="125" text-anchor="middle" font-size="11" fill="#94a3b8">Gateway 定時觸發 → AI 執行任務 → 有需要才通知你</text>
+
+        <defs>
+          <marker id="a" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+            <polygon points="0 0, 6 3, 0 6" fill="#94a3b8"/>
+          </marker>
+        </defs>
+      </svg>
+    </div>
+
+    <p><strong>HEARTBEAT.md 範例：</strong></p>
+    <pre><code># 每次心跳輪詢時的任務
+
+## 要做的事
+- 檢查有沒有未讀重要郵件
+- 確認接下來 2 小時內有沒有行事曆事項
+- 如果距離上次報告超過 8 小時，主動打招呼
+
+## 不用做的事
+- 23:00~08:00 不用主動推送（除非緊急）
+- 沒有新資訊時靜默即可</code></pre>
+
+    <h3>調整 Heartbeat 間隔</h3>
+    <pre><code>openclaw config set agents.defaults.heartbeat.intervalMinutes 60</code></pre>
+
+    <h3>Cron 排程任務</h3>
+    <p>需要精確時間或獨立執行的任務，用 Cron：</p>
+    <div class="terminal">
+      <div class="term-header">
+        <span class="term-dot r"></span><span class="term-dot y"></span><span class="term-dot g"></span>
+        <span class="term-title">Terminal</span>
+      </div>
+      <div class="term-body"><pre><code><span class="term-out"># 列出所有 Cron 任務</span>
+<span class="term-prompt">$</span> <span class="term-cmd">openclaw cron list</span>
+
+<span class="term-out"># 新增 Cron 任務（每天早上 9 點傳早安摘要到 Telegram）</span>
+<span class="term-prompt">$</span> <span class="term-cmd">openclaw cron add \</span>
+    <span class="term-cmd">--schedule "0 9 * * *" \</span>
+    <span class="term-cmd">--message "產生今日天氣與行事曆摘要" \</span>
+    <span class="term-cmd">--deliver --target telegram:8473859266</span>
+
+<span class="term-out"># 移除 Cron 任務</span>
+<span class="term-prompt">$</span> <span class="term-cmd">openclaw cron remove &lt;id&gt;</span></code></pre></div>
+    </div>
+
+    <h3>Heartbeat vs Cron：選哪個？</h3>
+    <table class="config-table">
+      <thead><tr><th>情境</th><th>建議</th></tr></thead>
+      <tbody>
+        <tr><td>多項定期檢查（郵件 + 行事曆 + 天氣）</td><td>Heartbeat</td></tr>
+        <tr><td>精確時間很重要（每天 9:00 整）</td><td>Cron</td></tr>
+        <tr><td>一次性提醒（20 分鐘後叫我）</td><td>Cron</td></tr>
+        <tr><td>需要用到最近對話的上下文</td><td>Heartbeat</td></tr>
+        <tr><td>獨立執行、不需要主 session 參與</td><td>Cron</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- 8. 遠端連線 -->
+  <!-- ══════════════════════════════════════════ -->
+  <section class="section" id="remote">
+    <div class="section-header">
+      <div class="step-num">8</div>
+      <h2>遠端連線</h2>
+    </div>
+
+    <p>
+      預設 Gateway 只開放本機連線（loopback），如果你想從手機 App 或外部網路連入，需要額外設定。
+    </p>
+
+    <h3>Tailscale（推薦方案）</h3>
+    <p>
+      Tailscale 是最安全的遠端連線方式，不需要開放公網 Port，
+      所有流量走加密 VPN Mesh。
+    </p>
+    <pre><code># 先安裝 Tailscale：https://tailscale.com/download
+# 登入後確認裝置已在網路中
+
+# 開啟 Tailscale 整合
+openclaw config set gateway.tailscale.mode auto
+openclaw gateway restart</code></pre>
+
+    <div class="callout tip">
+      <span class="callout-icon">💡</span>
+      <div>
+        <strong>手機 App 連線：</strong><br>
+        設定好 Tailscale 後，執行 <code>openclaw qr</code> 產生配對 QR Code，
+        用 iOS/Android 的 OpenClaw App 掃描即可。
+      </div>
+    </div>
+
+    <h3>Reverse Proxy（進階）</h3>
+    <p>如果部署在 VPS 或需要自訂 domain，可以用 Nginx/Caddy 當反向代理：</p>
+    <pre><code># Nginx 範例（/etc/nginx/conf.d/openclaw.conf）
+server {
+    listen 443 ssl;
+    server_name your.domain.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:18789;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+    }
+}</code></pre>
+    <p>同時把 Gateway bind 改為 loopback（只讓 Nginx 連）：</p>
+    <pre><code>openclaw config set gateway.bind loopback
+openclaw config set gateway.controlUi.publicUrl https://your.domain.com
+openclaw gateway restart</code></pre>
+
+    <div class="callout warn">
+      <span class="callout-icon">⚠️</span>
+      <div>
+        <strong>對外開放時務必啟用 HTTPS</strong><br>
+        Gateway 的 auth token 在 HTTP 下以明文傳輸。
+        建議使用 Caddy（自動管理 Let's Encrypt 憑證）或 Tailscale HTTPS。
+      </div>
+    </div>
+
+    <h3>DNS 探索（多機環境）</h3>
+    <p>在多台機器組成的環境中，可以用 DNS 讓各裝置自動找到 Gateway：</p>
+    <pre><code>openclaw dns --help</code></pre>
+  </section>
+
+  <!-- ── FAQ ── -->
+  <section class="section" id="faq">
+    <div class="section-header">
+      <div class="step-num" style="background:#64748b;">？</div>
+      <h2>常見問題</h2>
+    </div>
+
+    <details>
+      <summary>改了設定後，什麼時候要重啟 Gateway？</summary>
+      <div class="faq-body">
+        <p>大部分設定改完都需要重啟才會生效：</p>
+        <pre><code>openclaw gateway restart</code></pre>
+        <p>例外：直接編輯 <code>SOUL.md</code>、<code>AGENTS.md</code>、<code>HEARTBEAT.md</code> 等 workspace 檔案，下次對話就會生效，不需要重啟。</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>如何確認 config 目前的值？</summary>
+      <div class="faq-body">
+        <pre><code># 查看特定路徑的值
+openclaw config get gateway
+openclaw config get agents.defaults.model
+openclaw config get channels.telegram
+
+# 查看設定檔位置
+openclaw config file</code></pre>
+      </div>
+    </details>
+
+    <details>
+      <summary>要怎麼重置 / 清除設定？</summary>
+      <div class="faq-body">
+        <p>移除特定設定（恢復預設值）：</p>
+        <pre><code>openclaw config unset agents.defaults.model.primary</code></pre>
+        <p>完整重置（保留 CLI，清除所有設定和資料）：</p>
+        <pre><code>openclaw reset</code></pre>
+      </div>
+    </details>
+
+    <details>
+      <summary>記憶搜尋（Memory Search）要怎麼設定？</summary>
+      <div class="faq-body">
+        <p>記憶搜尋需要 embedding 模型的 API Key（OpenAI、Google、Voyage、Mistral 其一），或本地 embedding 模型。</p>
+        <pre><code># 設定方式
+openclaw configure --section model
+
+# 停用（如果不需要語意搜尋）
+openclaw config set agents.defaults.memorySearch.enabled false
+
+# 確認狀態
+openclaw memory status --deep</code></pre>
+      </div>
+    </details>
+
+    <details>
+      <summary>Skills 自訂安裝路徑怎麼設？</summary>
+      <div class="faq-body">
+        <p>可以把自訂 Skill 放在 workspace 底下或任意路徑，然後在 config 指定：</p>
+        <pre><code>openclaw config set agents.defaults.skills.extraPaths \
+  '["/path/to/my-skills"]' --strict-json</code></pre>
+      </div>
+    </details>
+
+    <details>
+      <summary>多個 Telegram Bot 可以同時運作嗎？</summary>
+      <div class="faq-body">
+        <p>一個 Gateway 實例目前只支援一個 Telegram Bot。
+        如果需要多 Bot，可以用 <code>--profile</code> 參數開多個獨立 Gateway：</p>
+        <pre><code>openclaw --profile work gateway start
+openclaw --profile personal gateway start</code></pre>
+        <p>各 profile 使用不同的 state 目錄和設定檔，互不干擾。</p>
+      </div>
+    </details>
+  </section>
+
+  <!-- ── Footer ── -->
+  <footer>
+    <p>
+      OpenClaw 官方文件：<a href="https://docs.openclaw.ai" target="_blank">docs.openclaw.ai</a>　
+      社群 Discord：<a href="https://discord.com/invite/clawd" target="_blank">discord.com/invite/clawd</a>　
+      Skill 庫：<a href="https://clawhub.ai" target="_blank">clawhub.ai</a>
+    </p>
+    <p style="margin-top: 8px; color: #cbd5e1;">本文件最後更新：2026-04-02</p>
+  </footer>
+
+<script>
+  function switchTab(group, id) {
+    const panels = document.querySelectorAll(`[id^="${group}-"]`);
+    const btns   = document.querySelectorAll(`#tabs-${group} .tab-btn`);
+    panels.forEach(p => p.classList.remove('active'));
+    btns.forEach(b => b.classList.remove('active'));
+    document.getElementById(`${group}-${id}`).classList.add('active');
+    event.target.classList.add('active');
+  }
+</script>
+
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+    <script>
+      // Main tab switching logic
+      const tabWorkflowBtn = document.getElementById('tab-workflow');
+      const tabAiToolsBtn = document.getElementById('tab-ai-tools');
+      const contentWorkflow = document.getElementById('content-workflow');
+      const contentAiTools = document.getElementById('content-ai-tools');
+
+      function switchMainTab(tab) {
+        if (tab === 'ai') {
+          tabWorkflowBtn.className = "px-8 py-3 rounded-xl font-bold bg-transparent text-gray-500 hover:text-gray-800 hover:bg-gray-50 transition-all";
+          tabAiToolsBtn.className  = "px-8 py-3 rounded-xl font-bold bg-indigo-600 text-white shadow-md transition-all";
+          contentWorkflow.classList.remove('block');
+          contentWorkflow.classList.add('hidden');
+          contentAiTools.classList.remove('hidden');
+          contentAiTools.classList.add('block');
+        } else {
+          tabAiToolsBtn.className = "px-8 py-3 rounded-xl font-bold bg-transparent text-gray-500 hover:text-gray-800 hover:bg-gray-50 transition-all";
+          tabWorkflowBtn.className  = "px-8 py-3 rounded-xl font-bold bg-indigo-600 text-white shadow-md transition-all";
+          contentAiTools.classList.remove('block');
+          contentAiTools.classList.add('hidden');
+          contentWorkflow.classList.remove('hidden');
+          contentWorkflow.classList.add('block');
+        }
+      }
+
+      tabWorkflowBtn.addEventListener('click', () => switchMainTab('workflow'));
+      tabAiToolsBtn.addEventListener('click', () => switchMainTab('ai'));
+
+      // Check URL parameters on load
+      window.addEventListener('DOMContentLoaded', () => {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('tab') === 'ai') {
+          switchMainTab('ai');
+        }
+        
+        // Also setup subtabs for AI tools
+        const subtabs = ['codex', 'claude', 'openclaw-basic', 'openclaw-adv'];
+        subtabs.forEach(sub => {
+          const btn = document.getElementById('subtab-' + sub);
+          if (btn) {
+            btn.addEventListener('click', () => {
+              subtabs.forEach(s => {
+                const b = document.getElementById('subtab-' + s);
+                const c = document.getElementById(s + '-content');
+                if(b) b.className = "w-full text-left px-4 py-3 rounded-xl font-bold bg-transparent text-gray-500 hover:bg-gray-50 transition-all flex items-center justify-between";
+                if(c) c.className = "hidden animate-[fadeIn_0.5s_ease-in-out]";
+              });
+              btn.className = "w-full text-left px-4 py-3 rounded-xl font-bold bg-indigo-50 text-indigo-700 transition-all flex items-center justify-between";
+              const content = document.getElementById(sub + '-content');
+              if(content) content.className = "block animate-[fadeIn_0.5s_ease-in-out]";
+            });
+          }
+        });
+      });
+    </script>
+    
+  </body>
+</html>

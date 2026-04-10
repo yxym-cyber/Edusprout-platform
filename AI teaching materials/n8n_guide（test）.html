@@ -1,0 +1,1084 @@
+<!doctype html>
+<html lang="zh-TW">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>n8n 工作流實作教學</title>
+  <!-- 引入 Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .transition-all {
+      transition-duration: 300ms;
+    }
+
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+
+    /* 隱藏未選擇的內容區塊 */
+    .content-section {
+      display: none;
+    }
+
+    .content-section.active {
+      display: block;
+      animation: fadeIn 0.4s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* 自訂核取方塊樣式 */
+    .custom-checkbox {
+      appearance: none;
+      width: 1.5rem;
+      height: 1.5rem;
+      border: 2px solid #cbd5e1;
+      border-radius: 0.375rem;
+      background-color: white;
+      cursor: pointer;
+      transition: all 0.2s ease-in-out;
+      position: relative;
+    }
+
+    .custom-checkbox:checked {
+      background-color: #10b981;
+      border-color: #10b981;
+    }
+
+    .custom-checkbox:checked::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 45%;
+      width: 0.4rem;
+      height: 0.8rem;
+      border: solid white;
+      border-width: 0 2.5px 2.5px 0;
+      transform: translate(-50%, -50%) rotate(45deg);
+    }
+
+    /* 選擇單元按鈕的作用中樣式 */
+    .tab-btn.active {
+      background-color: #4f46e5;
+      color: white;
+      border-color: #4f46e5;
+      font-weight: 700;
+    }
+  </style>
+</head>
+
+<body class="bg-gray-50 min-h-screen text-gray-800 font-sans p-4 md:p-8">
+  <div class="max-w-7xl mx-auto space-y-6">
+    <!-- Main Tab Navigation -->
+    <div class="flex justify-center mb-4">
+      <div class="bg-white p-1.5 rounded-2xl shadow-sm border border-gray-100 flex gap-1 items-center">
+        <button id="tab-workflow" class="px-8 py-3 rounded-xl font-bold bg-indigo-600 text-white shadow-md transition-all">工作流教學</button>
+        <button id="tab-ai-tools" class="px-8 py-3 rounded-xl font-bold bg-transparent text-gray-500 hover:text-gray-800 hover:bg-gray-50 transition-all">AI 工具教學</button>
+      </div>
+    </div>
+
+    <!-- ================= CONTENT: 工作流教學 (n8n Guide) ================= -->
+    <div id="content-workflow" class="flex flex-col h-[calc(100vh-10rem)] bg-white rounded-3xl shadow-xl overflow-hidden border border-gray-100 animate-[fadeIn_0.5s_ease-in-out] block">
+      <header class="bg-white border-b border-gray-200 px-6 py-5 flex flex-col md:flex-row justify-between items-center gap-4 z-10 shrink-0">
+        <div>
+          <h1 class="text-2xl font-extrabold flex items-center gap-3">
+            <span class="w-10 h-10 rounded-xl bg-orange-500 text-white flex items-center justify-center font-bold text-xl ring-4 ring-orange-100">n</span>
+            實作教學：建立專屬工作流
+          </h1>
+          <p class="text-gray-500 text-sm mt-1 ml-14">請依序勾選完成左側檢核表，跟隨步驟完成節點設定。</p>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <label class="text-xs font-bold text-gray-500 uppercase tracking-wider">切換教學模組</label>
+          <select id="workflow-selector" class="block w-56 rounded-xl border-gray-300 bg-gray-50 py-2.5 pl-3 pr-10 text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 sm:text-sm font-bold border cursor-pointer" onchange="switchWorkflow(this.value)">
+            <option value="prompt">提問工作流 (Prompt)</option>
+            <option value="proposal">計畫書工作流 (Proposal)</option>
+          </select>
+        </div>
+      </header>
+
+    <!-- 整體進度條區域 -->
+    <div
+      class="bg-indigo-50 px-6 py-4 flex flex-col sm:flex-row items-center gap-4 shrink-0 border-b border-indigo-100">
+      <div class="flex items-center gap-3 w-full sm:w-1/4">
+        <div class="w-10 h-10 rounded-full bg-indigo-200 flex items-center justify-center text-indigo-700 font-bold">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+          </svg>
+        </div>
+        <div>
+          <span class="block text-xs font-bold text-indigo-500 uppercase tracking-wider">整體完成進度</span>
+          <span id="progressText" class="text-lg font-extrabold text-indigo-900">0%</span>
+        </div>
+      </div>
+
+      <div class="w-full sm:w-3/4">
+        <div class="h-3 w-full bg-indigo-200/50 rounded-full overflow-hidden relative">
+          <div id="progressBar"
+            class="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-500 ease-out"
+            style="width: 0%"></div>
+          <!-- 發光特效 -->
+          <div
+            class="absolute top-0 right-0 bottom-0 w-20 bg-gradient-to-r from-transparent to-white/30 skew-x-12 translate-x-full animate-[shimmer_2s_infinite]">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 左右分欄主體區 -->
+    <div class="flex flex-1 overflow-hidden flex-col lg:flex-row relative">
+      <!-- 網頁讀取時的預設遮罩 (提升切換流暢度) -->
+      <div id="loadingOverlay" class="absolute inset-0 bg-white z-50 flex items-center justify-center hidden">
+        <div class="flex flex-col items-center">
+          <svg class="animate-spin h-10 w-10 text-indigo-600 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none"
+            viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+            </path>
+          </svg>
+          <span class="text-gray-500 font-medium">切換單元中...</span>
+        </div>
+      </div>
+
+      <!-- ================= 左側：實作步驟檢核表 ================= -->
+      <div
+        class="w-full lg:w-[380px] xl:w-[420px] bg-gray-50 border-r border-gray-200 overflow-y-auto flex flex-col shrink-0">
+        <div class="p-6">
+          <h2 class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">
+            實作檢核表 (Checklist)
+          </h2>
+
+          <!-- 動態渲染清單的容器 -->
+          <div id="checklistContainer" class="space-y-4">
+            <!-- Javascript 會將清單注入在此 -->
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= 右側：圖文教學區 ================= -->
+      <div class="flex-1 bg-white overflow-y-auto relative p-6 lg:p-10">
+        <!-- 預設未選擇步驟時的畫面 -->
+        <div id="emptyGuideState"
+          class="absolute inset-0 flex flex-col items-center justify-center text-center p-8 z-10 bg-white">
+          <div class="w-24 h-24 bg-indigo-50 rounded-full flex items-center justify-center mb-6">
+            <svg class="w-12 h-12 text-indigo-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122">
+              </path>
+            </svg>
+          </div>
+          <h3 class="text-2xl font-bold text-gray-800 mb-2">
+            請從左側點擊檢核表步驟
+          </h3>
+          <p class="text-gray-500 max-w-md">
+            這裡將會動態顯示該步驟的對應圖示與參數設定說明。完成該步驟後即可勾選左方的方塊。
+          </p>
+        </div>
+
+        <!-- 動態注入的教學內容容器 -->
+        <div id="guideContentContainer" class="max-w-3xl mx-auto space-y-8 hidden relative z-20">
+          <!-- 標題與標籤 -->
+          <div>
+            <div
+              class="inline-flex items-center px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-sm font-bold mb-3 border border-blue-200"
+              id="guideStepBadge">
+              第 1 步
+            </div>
+            <h2 class="text-3xl font-extrabold text-gray-900" id="guideTitle">
+              節點教學標題
+            </h2>
+            <p class="text-gray-600 mt-4 text-lg leading-relaxed" id="guideDesc">
+              步驟的詳細說明與情境介紹。
+            </p>
+          </div>
+
+          <!-- 警告提示 (不可直接複製 JSON) -->
+          <div class="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-lg flex items-start">
+            <svg class="w-6 h-6 text-amber-500 mr-3 shrink-0 mt-0.5" fill="none" stroke="currentColor"
+              viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z">
+              </path>
+            </svg>
+            <div>
+              <h4 class="font-bold text-amber-800 text-sm">
+                學習提醒：親自拖曳節點
+              </h4>
+              <p class="text-amber-700 text-sm mt-1">
+                為了確保您熟悉 n8n 的操作邏輯，本教學不提供任何可複製的 JSON
+                程式碼，請依照截圖指示，在您的 n8n 畫布上手動配置節點參數。
+              </p>
+            </div>
+          </div>
+
+          <!-- 截圖示意區 (使用具象化的 CSS 繪製節點替代真實圖片，確保即使沒有圖檔也能完美展示) -->
+          <div class="bg-gray-100 rounded-2xl p-6 border border-gray-200">
+            <div class="flex items-center justify-between mb-4">
+              <span class="text-sm font-bold text-gray-500 uppercase">n8n 畫面示意</span>
+              <div class="flex space-x-1.5">
+                <div class="w-3 h-3 rounded-full bg-red-400"></div>
+                <div class="w-3 h-3 rounded-full bg-yellow-400"></div>
+                <div class="w-3 h-3 rounded-full bg-green-400"></div>
+              </div>
+            </div>
+
+            <!-- 動態插入視圖 (節點示意或參數設定面板) -->
+            <div id="guideVisualArea"
+              class="bg-white rounded-xl shadow-sm border border-gray-200 p-8 min-h-[250px] flex items-center justify-center relative overflow-hidden">
+              <!-- JS 注入區 -->
+            </div>
+          </div>
+
+          <!-- 參數設定表格區 -->
+          <div>
+            <h3 class="text-xl font-bold text-gray-800 mb-4 pb-2 border-b-2 border-indigo-100 inline-block">
+              參數設定指引
+            </h3>
+            <div class="bg-white border text-gray-800 border-gray-200 rounded-xl overflow-hidden shadow-sm">
+              <table class="w-full text-left text-sm" id="guideTable">
+                <thead class="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th class="px-6 py-4 font-bold text-gray-600 w-1/3">
+                      欄位名稱 (Field)
+                    </th>
+                    <th class="px-6 py-4 font-bold text-gray-600">
+                      應填寫之設定值或說明
+                    </th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100" id="guideTableBody">
+                  <!-- JS 動態插入列 -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- 下一步按鈕與完成標記區 -->
+          <div class="pt-8 border-t border-gray-100 flex items-center justify-between">
+            <button id="markCurrentDoneBtn"
+              class="flex items-center gap-2 px-6 py-3 bg-green-50 text-green-700 hover:bg-green-600 hover:text-white border border-green-200 hover:border-transparent font-bold rounded-xl transition-all h-12">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+              </svg>
+              標記為已完成
+            </button>
+
+            <button id="nextStepBtn"
+              class="flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-all shadow-lg shadow-indigo-500/30 h-12 hidden">
+              前往下一步
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3">
+                </path>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div> <!-- end content-workflow -->
+
+  <!-- ================= CONTENT: AI 工具教學 ================= -->
+  <div id="content-ai-tools" class="hidden animate-[fadeIn_0.5s_ease-in-out]">
+    <div class="flex flex-col md:flex-row gap-6">
+      <div class="w-full md:w-64 shrink-0">
+        <div class="bg-white p-4 rounded-3xl shadow-sm border border-gray-100 sticky top-4">
+          <h3 class="font-bold text-gray-800 mb-4 px-2 text-sm uppercase tracking-wider">選擇教學模組</h3>
+          <div class="flex flex-col gap-2">
+            <button id="subtab-codex" class="w-full text-left px-4 py-3 rounded-xl font-bold bg-indigo-50 text-indigo-700 transition-all flex items-center justify-between">Codex 教學</button>
+            <button id="subtab-claude" class="w-full text-left px-4 py-3 rounded-xl font-bold bg-transparent text-gray-500 hover:bg-gray-50 transition-all flex items-center justify-between">Claude 教學<span class="bg-gray-100 text-gray-400 text-[10px] px-2 py-0.5 rounded-md">建置中</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="flex-1 bg-white p-6 md:p-10 rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+        <div id="codex-content" class="max-w-3xl mx-auto space-y-12 text-gray-700 block animate-[fadeIn_0.5s_ease-in-out]">
+          <div class="border-b border-gray-100 pb-8">
+            <h2 class="text-3xl font-black text-gray-900 mb-4">Codex 教學</h2>
+            <p class="text-lg text-gray-500 leading-relaxed">Codex 是 OpenAI 的 AI 程式開發助手。你可以把它想成一個會幫你「看懂程式、寫程式、改程式、跑測試、解釋錯誤」的 AI 助理。它不只是聊天回答問題，Codex 可以在專案中閱讀檔案、修改程式、執行指令。</p>
+          </div>
+          <section>
+            <h3 class="text-xl font-bold text-gray-800 mb-5 flex items-center gap-2"><span class="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center text-sm">🎯</span> Codex 適合誰？</h3>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div class="bg-gray-50 p-4 rounded-xl border border-gray-100"><div class="font-bold text-gray-800 mb-1">1. 完全新手</div><div class="text-sm text-gray-600">想學程式，不知道怎麼開始。</div></div>
+              <div class="bg-gray-50 p-4 rounded-xl border border-gray-100"><div class="font-bold text-gray-800 mb-1">2. 初學者</div><div class="text-sm text-gray-600">已學點 Python/JS，想加快。</div></div>
+              <div class="bg-gray-50 p-4 rounded-xl border border-gray-100"><div class="font-bold text-gray-800 mb-1">3. 非工程背景</div><div class="text-sm text-gray-600">做小工具、網頁或腳本。</div></div>
+              <div class="bg-gray-50 p-4 rounded-xl border border-gray-100"><div class="font-bold text-gray-800 mb-1">4. 開發者</div><div class="text-sm text-gray-600">幫忙除錯、重構、補文件。</div></div>
+            </div>
+          </section>
+          <section class="bg-yellow-50/50 border border-yellow-200 p-6 md:p-8 rounded-2xl relative">
+            <h3 class="text-lg font-bold text-yellow-800 mb-4 flex items-center gap-2">🔰 為什麼一定要匯入專案？</h3>
+            <p class="mb-4 text-gray-700 text-sm leading-relaxed">很多新手打開 Codex 會遇到要求匯入專案且不能跳過。因為 Codex <strong>會直接操作檔案</strong>，它必須知道工作目錄在哪。最簡單的解法是在桌面建立一個<strong>空資料夾</strong>並選取，接著要 Codex 幫你從零開始建立。</p>
+            <div class="mt-3 p-3 bg-white rounded-lg border border-gray-200"><code class="text-indigo-600 text-sm">我是一個新手，請幫我從零開始建立簡單專案，並教我每個檔案做什麼。</code></div>
+          </section>
+          <section>
+            <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2"><span class="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-sm">💻</span> 在哪裡用？</h3>
+            <p class="text-sm text-gray-600 mb-2">強烈推薦：<strong>先用 IDE 或 App，再碰 CLI。</strong></p>
+            <ul class="space-y-2 text-sm text-gray-600">
+              <li><strong>A. 在 IDE 中用 (推薦):</strong> 支援 VS Code、Cursor 等。</li>
+              <li><strong>B. 用 Codex app (推薦):</strong> 官方應用程式。</li>
+              <li><strong>C. CLI:</strong> 需要熟悉終端機操作。</li>
+            </ul>
+          </section>
+          <section>
+            <h3 class="text-xl font-bold text-gray-800 mb-4"><span class="text-lg">✨</span> 可以拿來做什麼？</h3>
+            <ul class="space-y-2 text-sm text-gray-600 list-decimal ml-6">
+              <li>生出程式草稿</li><li>看懂別人的程式</li><li>修 bug</li><li>整理與優化程式</li><li>完成一整段開發流程</li>
+            </ul>
+          </section>
+          <section>
+            <h3 class="text-xl font-bold text-gray-800 mb-4"><span class="text-lg">🚀</span> 新手上手 5 步驟</h3>
+            <ol class="space-y-2 text-sm text-gray-600 list-decimal ml-6">
+              <li><strong>準備小專案:</strong> 從小任務起手。</li>
+              <li><strong>需求講清楚:</strong> 講明語言、功能與風格。</li>
+              <li><strong>先看做什麼:</strong> 不急著收，看改了什麼檔案。</li>
+              <li><strong>要求它解釋:</strong> 追問為什麼這樣寫，讓它變成教練。</li>
+              <li><strong>小步修改:</strong> 不要一次改太多功能。</li>
+            </ol>
+          </section>
+        </div>
+        <div id="claude-content" class="hidden py-32 text-center animate-[fadeIn_0.5s_ease-in-out]">
+          <h3 class="text-2xl font-bold text-gray-800 mb-2">Claude 教學</h3>
+          <p class="text-gray-500">專業內容正在努力建置中，敬請期待！</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div> <!-- 結束 max-w-7xl -->
+
+  <script>
+    function initTabs() {
+      const wBtn = document.getElementById('tab-workflow'), aBtn = document.getElementById('tab-ai-tools');
+      const wCont = document.getElementById('content-workflow'), aCont = document.getElementById('content-ai-tools');
+      const cxBtn = document.getElementById('subtab-codex'), clBtn = document.getElementById('subtab-claude');
+      const cxCont = document.getElementById('codex-content'), clCont = document.getElementById('claude-content');
+
+      function switchT(a, i, cO, cH, rA, rI) {
+        a.classList.remove(...rI); a.classList.add(...rA);
+        i.classList.remove(...rA); i.classList.add(...rI);
+        cH.classList.add('hidden'); cH.classList.remove('block');
+        cO.classList.remove('hidden'); cO.classList.add('block');
+      }
+
+      wBtn.onclick = () => switchT(wBtn, aBtn, wCont, aCont, ['bg-indigo-600','text-white','shadow-md'], ['bg-transparent','text-gray-500']);
+      aBtn.onclick = () => switchT(aBtn, wBtn, aCont, wCont, ['bg-indigo-600','text-white','shadow-md'], ['bg-transparent','text-gray-500']);
+      
+      cxBtn.onclick = () => switchT(cxBtn, clBtn, cxCont, clCont, ['bg-indigo-50','text-indigo-700'], ['bg-transparent','text-gray-500']);
+      clBtn.onclick = () => switchT(clBtn, cxBtn, clCont, cxCont, ['bg-indigo-50','text-indigo-700'], ['bg-transparent','text-gray-500']);
+    }
+    document.addEventListener('DOMContentLoaded', initTabs);
+  </script>
+
+  <!-- 資料集與邏輯腳本 -->
+  <script>
+    // ==== 所有單元的步驟資料定義 ====
+    const workflowData = {
+      prompt: {
+        overviewImg: "https://placehold.co/800x400/4f46e5/ffffff?text=Prompt+Workflow+Overview", // 佔位符
+        steps: [
+          {
+            id: "p1",
+            title: "新增 Webhook 觸發節點",
+            desc: "建立工作流的第一步，我們需要一個入口點來接收來自前端網頁（或 LINE 等平台）的請求訊號，才能啟動後續的流程。",
+            nodes: [
+              {
+                id: "p1-n1",
+                name: "Webhook Node",
+                visualHtml: `<div class="flex flex-col items-center">
+                                <div class="w-16 h-16 bg-purple-100 border-2 border-purple-500 rounded-xl flex items-center justify-center shadow-md z-10">
+                                    <svg class="w-8 h-8 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                                </div>
+                                <span class="mt-3 font-bold text-gray-700">Webhook</span>
+                                <div class="mt-4 px-4 py-2 bg-gray-50 border border-gray-200 rounded text-xs font-mono text-gray-500 shadow-inner">
+                                    URL: https://{YOUR_N8N_URL}/webhook/prompt-receiver
+                                </div>
+                            </div>`,
+                params: [
+                  {
+                    field: "Authentication",
+                    desc: "None (為方便測試請先設定為無)",
+                  },
+                  { field: "HTTP Method", desc: "POST (為了接收 JSON payload)" },
+                  {
+                    field: "Respond",
+                    desc: "Immediately (讓前端不需等待整個 AI 生成完畢)",
+                  },
+                ],
+              }
+            ]
+          },
+          {
+            id: "p2",
+            title: "設定 Set 節點預處理",
+            desc: "收到 Webhook 的資料後，我們需要使用 Set 節點將傳入的參數（例如：使用者的問題、語氣設定）提取到第一層，方便後續的節點取用。",
+            nodes: [
+              {
+                id: "p2-n1",
+                name: "Set Node",
+                visualHtml: `<div class="flex items-center gap-2">
+                                <div class="w-12 h-12 bg-purple-50 border border-purple-300 rounded-lg opacity-50 flex items-center justify-center"><svg class="w-6 h-6 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg></div>
+                                <div class="h-0.5 w-10 bg-gray-300"></div>
+                                <div class="w-16 h-16 bg-blue-100 border-2 border-blue-500 rounded-xl flex items-center justify-center shadow-md z-10 transform hover:scale-105 transition-transform"><span class="font-bold text-blue-700 text-xl">{x}</span></div>
+                            </div>
+                            <span class="absolute bottom-4 font-bold text-gray-700">Set</span>`,
+                params: [
+                  { field: "Values to Set (Add Value)", desc: "String (字串)" },
+                  { field: "Name", desc: "<code>userQuestion</code>" },
+                  {
+                    field: "Value",
+                    desc: "拖曳右側欄的 <code>body.question</code> 變數進來",
+                  },
+                ],
+              }
+            ]
+          },
+          {
+            id: "p3",
+            title: "設定 OpenAI 節點參數",
+            desc: "核心步驟！我們將這段問題丟給大語言模型 (LLM)，藉由預先設定的 System Prompt，要求它轉換成更高品質的提問模板。",
+            nodes: [
+              {
+                id: "p3-n1",
+                name: "OpenAI Node",
+                visualHtml: `<div class="flex flex-col items-center max-w-sm w-full">
+                                <div class="bg-gray-800 w-full rounded-t-lg px-4 py-2 flex justify-between items-center text-white">
+                                    <span class="text-sm font-bold flex items-center gap-2"><div class="w-5 h-5 bg-white text-gray-800 rounded-full flex items-center justify-center font-bold text-xs">AI</div> OpenAI Chat Model</span>
+                                </div>
+                                <div class="bg-white border border-gray-200 border-t-0 rounded-b-lg w-full p-4 space-y-3 shadow-md">
+                                    <div class="bg-gray-50 border border-gray-100 rounded text-xs p-2"><strong>Resource:</strong> Chat</div>
+                                    <div class="bg-gray-50 border border-gray-100 rounded text-xs p-2"><strong>Operation:</strong> Generate Message</div>
+                                    <div class="bg-green-50 border border-green-200 text-green-800 rounded text-xs p-3"><strong>Model:</strong> gpt-3.5-turbo (或 gpt-4o)</div>
+                                </div>
+                            </div>`,
+                params: [
+                  {
+                    field: "Credential to connect with",
+                    desc: "選擇您已綁定的 OpenAI API Key (如無請先至左側 Credentials 新增)",
+                  },
+                  {
+                    field: "System Message (Optional)",
+                    desc: "「你是一個專業的提示詞工程師，請優化使用者的問題使其具備清晰的脈絡、身份定義與限制條件。」",
+                  },
+                  {
+                    field: "Message",
+                    desc: "使用表達式 (Expression) 填入 <code>{{ $json.userQuestion }}</code>",
+                  },
+                ],
+              }
+            ]
+          },
+        ]
+      },
+      proposal: {
+        overviewImg: "./full_workflow_placeholder.jpg",
+        steps: [
+          {
+            id: "pr1",
+            title: "第一階段：建立觸發與檔案處理起點",
+            desc: "這是計畫書工作流的「前段」。我們需要建立一個可以供外部呼叫的表單入口點來接收上傳的 PDF 檔案，接著透過自訂程式將檔案名稱分割成學校名稱，最後從 PDF 檔案中萃取出所有文字字串供後續步驟使用。",
+            nodes: [
+              {
+                id: "pr1-n1",
+                name: "On form submission",
+                visualHtml: `<div class="mb-4 flex flex-col items-center">
+                                    <img src="placeholder.jpg" alt="On form submission設定畫面" class="w-full h-auto rounded-lg border border-gray-200 shadow-sm" />
+                                    <p class="text-xs text-gray-500 mt-2">這個節點是用來接收附有計畫書 PDF 表單傳來的起始資料。</p>
+                                </div>
+                                <div class="w-16 h-16 bg-purple-100 border-2 border-purple-500 rounded-xl flex items-center justify-center shadow-md mx-auto">
+                                    <svg class="w-8 h-8 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
+                                </div><span class="mt-3 block text-center font-bold text-gray-700">Form Trigger</span>`,
+                params: [
+                  {
+                    field: "Form Title",
+                    desc: "請輸入「上傳檔案」",
+                  },
+                  {
+                    field: "Form Description",
+                    desc: "請輸入「pdf檔案」",
+                  },
+                  {
+                    field: "Form Fields",
+                    desc: "請新增一個欄位，<code>Field Label</code> 請輸入「<code>file</code>」，並且 <code>Field Type</code> 選擇「<code>File</code> (檔案上傳)」",
+                  }
+                ]
+              },
+              {
+                id: "pr1-n2",
+                name: "Code 檔案拆分",
+                visualHtml: `<div class="mb-4 flex flex-col items-center">
+                                    <img src="placeholder.jpg" alt="Code 檔案拆分設定畫面" class="w-full h-auto rounded-lg border border-gray-200 shadow-sm" />
+                                    <p class="text-xs text-gray-500 mt-2">這一步利用程式碼從檔名中切分出學校名稱，並存入新欄位。</p>
+                                </div>
+                                <div class="w-16 h-16 bg-blue-100 border-2 border-blue-500 rounded-xl flex items-center justify-center shadow-md mx-auto">
+                                    <span class="font-bold text-blue-700 font-mono">&lt;/&gt;</span>
+                                </div><span class="mt-3 block text-center font-bold text-gray-700">Code (檔案拆分)</span>`,
+                params: [
+                  {
+                    field: "Language",
+                    desc: "選擇「JavaScript」",
+                  },
+                  {
+                    field: "Code 撰寫邏輯",
+                    desc: "這步驟請撰寫迴圈處理傳入的檔案。目標是從 <code>fileName</code> 擷取第一個「底線 <code>_</code>」前面的字 (如：亞洲大學_112年計畫.pdf &rightarrow; 亞洲大學)，並移除副檔名。將取得的名稱寫入 <code>school_name</code> 中，最後返回帶有原檔案的陣列 <code>newItems</code>。",
+                  }
+                ]
+              },
+              {
+                id: "pr1-n3",
+                name: "成果報告暨修正計畫書",
+                visualHtml: `<div class="mb-4 flex flex-col items-center">
+                                    <img src="placeholder.jpg" alt="成果報告暨修正計畫書設定畫面" class="w-full h-auto rounded-lg border border-gray-200 shadow-sm" />
+                                    <p class="text-xs text-gray-500 mt-2">使用 Extract from File 節點來將二進位的 PDF 檔轉成純文字內容。</p>
+                                </div>
+                                <div class="w-16 h-16 bg-green-100 border-2 border-green-500 rounded-xl flex items-center justify-center shadow-md text-green-600 font-bold text-xl mx-auto">PDF</div><span class="mt-3 block text-center font-bold text-gray-700">Extract from File</span>`,
+                params: [
+                  {
+                    field: "Operation",
+                    desc: "操作類型請選擇「<code>Extract from PDF</code>」",
+                  },
+                  {
+                    field: "Binary Property Name",
+                    desc: "請填寫「<code>file</code>」 (對應上兩步傳入的檔案屬性)",
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            id: "pr2",
+            title: "第二階段：建立分批處理迴圈與結果存檔",
+            desc: "計畫書被轉換為文字內容後，我們需要一個「Loop Over Items」節點來將所有檔案變成逐一處理的迴圈，同時拉出「Done」的分支將原始檔案存入同一個資料夾做備份留存。",
+            nodes: [
+              {
+                id: "pr2-n1",
+                name: "Loop Over Items",
+                visualHtml: "<div class=\"mb-4 flex flex-col items-center\"><img src=\"placeholder.jpg\" alt=\"Loop Over Items設定畫面\" class=\"w-full h-auto rounded-lg border border-gray-200 shadow-sm\" /><p class=\"text-xs text-gray-500 mt-2\">使用 Loop 節點可以幫助我們一筆一筆讀取拆解出的文件物件。</p></div><div class=\"w-16 h-16 bg-blue-50 border-2 border-blue-400 rounded-xl flex items-center justify-center shadow-md opacity-90 mx-auto\"><svg class=\"w-8 h-8 text-blue-500\" fill=\"none\" viewBox=\"0 0 24 24\" stroke=\"currentColor\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15\"/></svg></div><span class=\"mt-3 block text-center font-bold text-gray-700\">Loop Over Items</span>",
+                params: [
+                  {
+                    field: "Batch Size",
+                    desc: "請保留預設值 <code>1</code> (逐筆讀取)，這樣能確保後面 AI 一次只看一所學校的一份資料。",
+                  }
+                ]
+              },
+              {
+                id: "pr2-n2",
+                name: "存檔到電腦",
+                visualHtml: "<div class=\"mb-4 flex flex-col items-center\"><img src=\"placeholder.jpg\" alt=\"存檔到電腦設定畫面\" class=\"w-full h-auto rounded-lg border border-gray-200 shadow-sm\" /><p class=\"text-xs text-gray-500 mt-2\">將這個節點連接到 Loop 的「Done」分支，迴圈跑完後會儲存原始檔案備份。</p></div><div class=\"w-16 h-16 bg-gray-100 border-2 border-gray-500 rounded-xl flex items-center justify-center shadow-md mx-auto\"><svg class=\"w-8 h-8 text-gray-600\" fill=\"none\" stroke=\"currentColor\" viewBox=\"0 0 24 24\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4\"></path></svg></div><span class=\"mt-3 block text-center font-bold text-gray-700\">Read/Write File</span>",
+                params: [
+                  {
+                    field: "Operation",
+                    desc: "選擇「Write File」寫入檔案。",
+                  },
+                  {
+                    field: "File Name",
+                    desc: "設定一個路徑給它，例如：<code>/home/node/.n8n-files/{{ $binary.data.fileName }}</code>。",
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            id: "pr3",
+            title: "第三階段：文本預處理與精細切割",
+            desc: "這是把又臭又長的數萬字計畫書濃縮處理的核心區域！我們將利用兩個 Code 節點串連：第一個先用正則表達式把文章粗分為「章節」，第二個再針對過長章節啟動「防呆機制」進行字數裁切。",
+            nodes: [
+              {
+                id: "pr3-n1",
+                name: "依章節切分",
+                visualHtml: "<div class=\"mb-4 flex flex-col items-center\"><img src=\"placeholder.jpg\" alt=\"依章節切分設定畫面\" class=\"w-full h-auto rounded-lg border border-gray-200 shadow-sm\" /><p class=\"text-xs text-gray-500 mt-2\">利用程式碼與正則表達式 (Regex) 抓出每一個段落的開頭標籤。</p></div><div class=\"w-16 h-16 bg-indigo-100 border-2 border-indigo-500 rounded-xl flex items-center justify-center shadow-md z-10 text-indigo-700 font-bold font-mono text-sm mx-auto\">&lt;/&gt;</div><span class=\"mt-3 block text-center font-bold text-gray-700\">Code (依章節切分)</span>",
+                params: [
+                  {
+                    field: "Language",
+                    desc: "選擇「JavaScript」",
+                  },
+                  {
+                    field: "Code 撰寫重點",
+                    desc: "使用寬鬆的標題定義陣列 (如：<code>/[壹貳參肆伍陸柒捌玖拾]+[、．\.]\\s*第一階段/</code> 等)，掃描全文後進行段落切割，將該段的 <code>school_name</code>、<code>section</code> 以及內文 <code>content</code> 一併回傳。",
+                  }
+                ]
+              },
+              {
+                id: "pr3-n2",
+                name: "章節底下依字數切割",
+                visualHtml: "<div class=\"mb-4 flex flex-col items-center\"><img src=\"placeholder.jpg\" alt=\"章節底下依字數切割設定畫面\" class=\"w-full h-auto rounded-lg border border-gray-200 shadow-sm\" /><p class=\"text-xs text-gray-500 mt-2\">為了防範某些章節文字太多被 AI 拒收，強制再做字數切塊。</p></div><div class=\"w-16 h-16 bg-indigo-100 border-2 border-indigo-500 rounded-xl flex items-center justify-center shadow-md z-10 text-indigo-700 font-bold font-mono text-sm mx-auto\">&lt;/&gt;</div><span class=\"mt-3 block text-center font-bold text-gray-700\">Code (依字數切割)</span>",
+                params: [
+                  {
+                    field: "Language",
+                    desc: "選擇「JavaScript」",
+                  },
+                  {
+                    field: "切割防呆機制",
+                    desc: "設定參數 <code>CHUNK_SIZE = 3000</code> 與 <code>CHUNK_OVERLAP = 200</code>。程式若發現該 section 大於 3000 字元，就會用迴圈切成多個 chunks，丟給下一步處理。",
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            id: "pr4",
+            title: "第四階段：AI 核心定義與資料細分擷取",
+            desc: "本段落建立了一位 AI 代理人（Agent）扮演「質性資料編碼助理」。請將這顆 Agent 連回前方的 Loop Node（形成迴圈閉環），這能讓它逐一閱讀每個切割出來的字塊，確保資料一網打盡。",
+            nodes: [
+              {
+                id: "pr4-n1",
+                name: "AI Agent-作法分類",
+                visualHtml: '<div class="mb-4 flex flex-col items-center"><img src="placeholder.jpg" alt="AI Agent-作法分類設定畫面" class="w-full h-auto rounded-lg border border-gray-200 shadow-sm" /><p class="text-xs text-gray-500 mt-2">在 Agent 節點中輸入詳細的分類 System Message 與 Prompt。</p></div><div class="flex flex-col items-center max-w-sm w-full mx-auto shadow-lg rounded-lg overflow-hidden"><div class="bg-gray-800 w-full px-4 py-2.5 flex justify-between items-center text-white"><span class="text-sm font-bold flex items-center gap-2"><span class="w-6 h-6 bg-white text-gray-800 rounded flex items-center justify-center font-bold text-[10px]">AI</span>Agent</span></div><div class="bg-white border border-gray-200 border-t-0 w-full p-4 space-y-3 relative"><div class="bg-indigo-50 border border-indigo-200 text-indigo-800 rounded-md text-sm p-3 font-semibold">📍 Role: 質性資料編碼助理</div></div></div>',
+                params: [
+                  {
+                    field: "Prompt Text",
+                    desc: "告知 AI 我們現在傳入的是 <code>{{ $json.school_name }}</code> 學校內 <code>{{ $json.section }}</code> 的章節。要求分析裡後的 <code>{{ $json.chunk_text }}</code> 片段並給出 JSON Array 回覆。",
+                  },
+                  {
+                    field: "System Message",
+                    desc: "將五大構面（A｜AI 發展策略與治理 到 E｜AI 產學合作與外部連結）的完整 L1/L2 定義貼在此處。嚴格宣告：不准推論、不准發明！一字不差摘錄原文。",
+                  }
+                ]
+              },
+              {
+                id: "pr4-n2",
+                name: "OpenAI Chat Model1",
+                visualHtml: '<div class="mb-4 flex flex-col items-center"><img src="placeholder.jpg" alt="OpenAI Chat Model1 設定畫面" class="w-full h-auto rounded-lg border border-gray-200 shadow-sm" /><p class="text-xs text-gray-500 mt-2">提供腦袋給上面的代理人，並掛載在 Agent 下方節點上。</p></div><div class="bg-gray-800 px-4 py-2 rounded-lg text-white font-bold flex gap-2 items-center mx-auto w-fit"><div class="w-5 h-5 bg-white text-gray-800 rounded-full flex items-center justify-center text-xs">AI</div>Chat Model</div>',
+                params: [
+                  {
+                    field: "Model",
+                    desc: "設定為 <code>openai/gpt-oss-20b</code> 或同等級之強大模型。",
+                  },
+                  {
+                    field: "Temperature",
+                    desc: "請設定為 <code>0.1</code>，將隨機性降到最低以確保擷取資料的一致性與高度客觀性。",
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            id: "pr5",
+            title: "第五階段：結果解析與初步輸出",
+            desc: "AI 代理人處理完畢後，我們會得到包含大量文字說明的 JSON 字串。本階段使用 Code 節點將其「清洗」成乾淨的資料表格式，並最後將分散的處理結果進行彙總，存出一份初步的 Excel 母表。",
+            nodes: [
+              {
+                id: "pr5-n1",
+                name: "格式整理 (結果解析)",
+                visualHtml: '<div class="mb-4 flex flex-col items-center"><div class="w-16 h-16 bg-blue-100 border-2 border-blue-500 rounded-xl flex items-center justify-center shadow-md font-mono font-bold text-blue-700">&lt;/&gt;</div></div>',
+                params: [
+                  {
+                    field: "JavaScript 邏輯",
+                    desc: "使用 Regex <code>rawOutput.match(/\\[[\\s\\S]*\\]/)</code> 抓取 AI 回傳內容中的 JSON 陣列部分，並將其攤平成標準物件陣列。",
+                  }
+                ]
+              },
+              {
+                id: "pr5-n2",
+                name: "Aggregate 格式彙集",
+                visualHtml: '<div class="mb-4 flex flex-col items-center"><div class="w-16 h-16 bg-orange-100 border-2 border-orange-500 rounded-xl flex items-center justify-center shadow-md text-orange-600"><svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg></div></div>',
+                params: [
+                  {
+                    field: "Aggregate",
+                    desc: "選擇 <code>Aggregate All Item Data</code>，將迴圈產出的多筆結果合併為單一個陣列物件，方便後續產出報表。",
+                  }
+                ]
+              },
+              {
+                id: "pr5-n3",
+                name: "輸出excel (初步清單)",
+                visualHtml: '<div class="mb-4 flex flex-col items-center"><div class="w-16 h-16 bg-emerald-100 border-2 border-emerald-500 rounded-xl flex items-center justify-center shadow-md text-emerald-600 font-bold">XLSX</div></div>',
+                params: [
+                  {
+                    field: "Operation",
+                    desc: "選擇 <code>Convert into File</code>，格式設為 <code>XLSX</code>。",
+                  },
+                  {
+                    field: "File Name",
+                    desc: "<code>{{ $json.school_name }}_AI策略摘要.xlsx</code>",
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            id: "pr6",
+            title: "第六階段：深度摘要與策略報告產出",
+            desc: "最後的大魔王！我們將彙總好的數百條證據，再次丟給高階 AI（GPT-OSS-20B），要求它扮演「高教策略分析師」，根據 A-E 五大構面撰寫一份具備洞見的純文字報告，並最終匯出成正式報表。",
+            nodes: [
+              {
+                id: "pr6-n1",
+                name: "格式整理 (合併文本)",
+                visualHtml: '<div class="w-16 h-16 bg-blue-100 border-2 border-blue-500 rounded-xl flex items-center justify-center shadow-md font-mono font-bold text-blue-700 mx-auto">&lt;/&gt;</div>',
+                params: [
+                  {
+                    field: "功能說明",
+                    desc: "將彙總後的資料依據 A 到 E 分類，並轉換為易於閱讀的 Markdown 格式清單，作為 AI 撰寫報告的「證據庫」。",
+                  }
+                ]
+              },
+              {
+                id: "pr6-n2",
+                name: "AI Agent-策略分析報告",
+                visualHtml: '<div class="flex flex-col items-center max-w-sm w-full mx-auto shadow-lg rounded-lg overflow-hidden border border-gray-100"><div class="bg-gray-800 w-full px-4 py-2 flex justify-between items-center text-white"><span class="text-xs font-bold flex items-center gap-2"><div class="w-4 h-4 bg-white text-gray-800 rounded-sm flex items-center justify-center font-bold text-[8px]">AI</div>Agent</span></div><div class="p-4 bg-white text-xs space-y-2 text-gray-600">● 角色：高等教育 AI 策略分析師<br>● 任務：A-E 五構面綜整報告</div></div>',
+                params: [
+                  {
+                    field: "System Message",
+                    desc: "定義分析師角色，要求「證據錨定」、「嚴禁推論」與「純文字輸出 (禁止 Markdown)」。",
+                  },
+                  {
+                    field: "Prompt Text",
+                    desc: "<code>請根據以下證據資料，為 {{ $json.school_name }} 撰寫一份報告...</code>",
+                  }
+                ]
+              },
+              {
+                id: "pr6-n3",
+                name: "輸出excel (策略報告)",
+                visualHtml: '<div class="w-16 h-16 bg-emerald-100 border-2 border-emerald-500 rounded-xl flex items-center justify-center shadow-md text-emerald-600 font-bold mx-auto">XLSX</div>',
+                params: [
+                  {
+                    field: "File Name",
+                    desc: "<code>{{ school_name }}_AI策略報告.xlsx</code>",
+                  }
+                ]
+              },
+              {
+                id: "pr6-n4",
+                name: "Merge",
+                visualHtml: '<div class="w-12 h-12 bg-gray-200 border-2 border-gray-400 rounded-full flex items-center justify-center shadow-sm mx-auto"><svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h8a2 2 0 012 2v9a2 2 0 01-2 2H8a2 2 0 01-2-2V9a2 2 0 012-2z"></path></svg></div>',
+                params: [
+                  {
+                    field: "Merge Mode",
+                    desc: "使用 <code>Combine</code> 或 <code>Wait for All Inputs</code>，將初步清單與最終報告兩個輸出流匯合。",
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    };
+
+    // ==== 狀態與 DOM 元素綁定 ====
+    let currentWorkflow = "prompt";
+    let currentData = workflowData[currentWorkflow];
+    let completedSteps = new Set();
+    // 我們現在可以選取 'step' 以及其子 'node'
+    let selectedStepIndex = null;
+    let selectedNodeIndex = null;
+    // 記錄哪個 step 的 accordion 是打開的（一維陣列或 Set）
+    let expandedSteps = new Set();
+
+    const checklistContainer = document.getElementById("checklistContainer");
+    const emptyGuideState = document.getElementById("emptyGuideState");
+    const guideContentContainer = document.getElementById(
+      "guideContentContainer"
+    );
+    const loadingOverlay = document.getElementById("loadingOverlay");
+    const progressBar = document.getElementById("progressBar");
+    const progressText = document.getElementById("progressText");
+
+    // 動態更新的 UI
+    const overviewImageContainer = document.createElement("div");
+    overviewImageContainer.className = "mb-8 bg-gray-100 rounded-2xl p-4 border border-gray-200 overflow-hidden relative shadow-inner";
+    checklistContainer.parentNode.insertBefore(overviewImageContainer, checklistContainer);
+
+    // ==== 初始化化介面 ====
+    function init() {
+      renderOverviewImage();
+      expandedSteps.add(0); // 預設展開第一個 step
+      renderChecklist();
+      updateProgress();
+    }
+
+    function renderOverviewImage() {
+      overviewImageContainer.innerHTML = `
+            <div class="text-xs font-bold text-gray-500 uppercase mb-2 tracking-wider">全景工作流架構</div>
+            <img src="\${currentData.overviewImg}" alt="Workflow Overview" class="w-full h-auto rounded shadow-sm object-cover border border-gray-200 mix-blend-multiply opacity-90 transition-opacity hover:opacity-100" style="max-height: 200px;" />
+          `;
+    }
+
+    // ==== 切換上方的教學單元 ====
+    window.switchWorkflow = function (type) {
+      if (currentWorkflow === type) return;
+
+      document
+        .querySelectorAll(".tab-btn")
+        .forEach((btn) => btn.classList.remove("active"));
+      event.target.classList.add("active");
+
+      loadingOverlay.classList.remove("hidden");
+
+      setTimeout(() => {
+        currentWorkflow = type;
+        currentData = workflowData[type];
+
+        completedSteps.clear();
+        expandedSteps.clear();
+        expandedSteps.add(0);
+        selectedStepIndex = null;
+        selectedNodeIndex = null;
+
+        renderOverviewImage();
+        renderChecklist();
+        updateProgress();
+        hideGuide();
+
+        loadingOverlay.classList.add("hidden");
+      }, 300);
+    };
+
+    // 打開/收合 Step Accordion
+    window.toggleStepAccordion = function (index, event) {
+      // 防止事件冒泡觸發其他的 click
+      if (event) event.stopPropagation();
+
+      if (expandedSteps.has(index)) {
+        expandedSteps.delete(index);
+      } else {
+        expandedSteps.add(index);
+      }
+      renderChecklist();
+    }
+
+    // ==== 渲染左側檢核表 (巢狀支援) ====
+    function renderChecklist() {
+      checklistContainer.innerHTML = "";
+
+      currentData.steps.forEach((step, sIndex) => {
+        const isCompleted = completedSteps.has(step.id);
+        const isExpanded = expandedSteps.has(sIndex);
+        // 檢查這個 step 裡有沒有 node 被點選
+        const hasSelectedNode = selectedStepIndex === sIndex && selectedNodeIndex !== null;
+
+        // 最外層 Step 卡片
+        let stepOuterClass = `rounded-xl border-2 transition-all flex flex-col mb-3 ${hasSelectedNode ? 'border-indigo-400 bg-indigo-50/10' : 'border-gray-200 bg-white hover:border-indigo-200'
+          }`;
+
+        let headerHTML = `
+              <div class="p-4 cursor-pointer flex items-center justify-between group" onclick="toggleStepAccordion(${sIndex}, event)">
+                  <div class="flex items-center gap-3">
+                      <div class="z-10" onclick="event.stopPropagation()">
+                          <input type="checkbox" id="cb-${step.id}" class="custom-checkbox flex-shrink-0 mt-1"
+                              ${isCompleted ? "checked" : ""}
+                              onchange="toggleStepStatus('${step.id}', event)">
+                      </div>
+                      <div>
+                          <h4 class="font-bold ${isCompleted ? "text-gray-400 line-through" : (hasSelectedNode ? "text-indigo-700" : "text-gray-700")} transition-colors">
+                              ${sIndex + 1}. ${step.title}
+                          </h4>
+                          ${isCompleted
+            ? `<span class="text-xs font-bold text-green-600 mt-1 inline-block">步驟已完成</span>`
+            : `<span class="text-xs text-gray-400 mt-1 inline-block">共 ${step.nodes.length} 個節點設定</span>`
+          }
+                      </div>
+                  </div>
+                  <div class="text-gray-400 transform transition-transform ${isExpanded ? 'rotate-180' : ''}">
+                      <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+                  </div>
+              </div>
+            `;
+
+        // 內部 Nodes 選單
+        let nodesHTML = '';
+        if (isExpanded) {
+          nodesHTML = `<div class="pl-12 pr-4 pb-4 space-y-2 border-t border-gray-100 pt-3 bg-gray-50/50 rounded-b-xl animate-[fadeIn_0.3s_ease-out]">`;
+
+          step.nodes.forEach((node, nIndex) => {
+            const isNodeSelected = selectedStepIndex === sIndex && selectedNodeIndex === nIndex;
+            const nodeClass = isNodeSelected
+              ? 'bg-indigo-600 text-white shadow-md border-transparent hover:bg-indigo-700'
+              : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-300 hover:text-indigo-600 shadow-sm';
+
+            nodesHTML += `
+                        <div class="px-4 py-2.5 rounded-lg border cursor-pointer text-sm font-medium transition-all flex items-center gap-2 ${nodeClass}"
+                             onclick="selectNode(${sIndex}, ${nIndex}, event)">
+                            ${isNodeSelected
+                ? `<svg class="w-4 h-4 text-white opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>`
+                : `<div class="w-1.5 h-1.5 rounded-full bg-gray-400"></div>`
+              }
+                            ${node.name}
+                        </div>
+                    `;
+          });
+          nodesHTML += `</div>`;
+        }
+
+        const fullHtml = `<div class="${stepOuterClass}">${headerHTML}${nodesHTML}</div>`;
+        checklistContainer.insertAdjacentHTML("beforeend", fullHtml);
+      });
+    }
+
+    // ==== 選取左側特定 Node (原為 Step)，並渲染右側教學區 ====
+    window.selectNode = function (sIndex, nIndex, event) {
+      if (event) event.stopPropagation();
+
+      selectedStepIndex = sIndex;
+      selectedNodeIndex = nIndex;
+      renderChecklist();
+
+      const stepParent = currentData.steps[sIndex];
+      const nodeData = stepParent.nodes[nIndex];
+      const isCompleted = completedSteps.has(stepParent.id);
+
+      emptyGuideState.classList.add("hidden");
+      guideContentContainer.classList.remove("hidden");
+
+      guideContentContainer.classList.remove("active");
+      void guideContentContainer.offsetWidth; // 觸發 reflow
+      guideContentContainer.classList.add("active");
+
+      // UI 綁出該步驟的共同資訊，以及特定節點內容
+      document.getElementById("guideStepBadge").textContent = `步驟 ${sIndex + 1} | 節點：${nodeData.name}`;
+      document.getElementById("guideTitle").textContent = nodeData.name + " 參數設定";
+      document.getElementById("guideDesc").textContent = stepParent.desc;
+
+      // 渲染節點圖示與表格
+      document.getElementById("guideVisualArea").innerHTML = nodeData.visualHtml;
+
+      const tbody = document.getElementById("guideTableBody");
+      tbody.innerHTML = "";
+      nodeData.params.forEach((p) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td class="px-6 py-4 font-medium text-gray-800 bg-gray-50/60 border-r border-gray-100">${p.field}</td>
+          <td class="px-6 py-4 text-gray-700">${p.desc}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      // 按鈕邏輯
+      const markBtn = document.getElementById("markCurrentDoneBtn");
+      const nextBtn = document.getElementById("nextStepBtn");
+
+      const newMarkBtn = markBtn.cloneNode(true);
+      markBtn.parentNode.replaceChild(newMarkBtn, markBtn);
+
+      const newNextBtn = nextBtn.cloneNode(true);
+      nextBtn.parentNode.replaceChild(newNextBtn, nextBtn);
+
+      // -- 預設下一步為同一步驟下一個 Node，或下個步驟第1個 Node --
+      let nextSIndex = sIndex;
+      let nextNIndex = nIndex + 1;
+      if (nextNIndex >= stepParent.nodes.length) {
+        nextSIndex = sIndex + 1;
+        nextNIndex = 0;
+        // 確保下個手風琴被打開
+        if (nextSIndex < currentData.steps.length) {
+          expandedSteps.add(nextSIndex);
+        }
+      }
+
+      const isLastNodeOfAll = nextSIndex >= currentData.steps.length;
+
+      if (isCompleted) {
+        newMarkBtn.innerHTML = `<svg class="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg> 整體步驟已完成`;
+        newMarkBtn.className = "flex items-center gap-2 px-6 py-3 bg-gray-100 text-gray-500 font-bold rounded-xl h-12 cursor-default border border-gray-200 mt-4 sm:mt-0";
+
+        if (!isLastNodeOfAll) {
+          newNextBtn.classList.remove("hidden");
+          newNextBtn.innerHTML = `前往下個節點設定 <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>`;
+          newNextBtn.onclick = () => selectNode(nextSIndex, nextNIndex);
+        } else {
+          newNextBtn.classList.add("hidden");
+        }
+      } else {
+        // 未完成時
+        newMarkBtn.innerHTML = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> 標記此步驟全完成`;
+        newMarkBtn.className = "flex items-center gap-2 mt-4 sm:mt-0 px-6 py-3 bg-green-50 text-green-700 hover:bg-green-600 hover:text-white border border-green-200 hover:border-transparent font-bold rounded-xl transition-all h-12 shadow-sm hover:shadow-md hover:-translate-y-0.5";
+
+        newMarkBtn.onclick = () => {
+          document.getElementById(`cb-${stepParent.id}`).checked = true;
+          completedSteps.add(stepParent.id);
+          updateProgress();
+
+          if (!isLastNodeOfAll) {
+            selectNode(nextSIndex, nextNIndex);
+          } else {
+            renderChecklist();
+            selectNode(sIndex, nIndex);
+          }
+        };
+
+        newNextBtn.classList.add("hidden");
+
+        if (!isLastNodeOfAll && nIndex < stepParent.nodes.length - 1) {
+          // 若尚未完成但只是看同一步驟的其他節點，仍然允許純『下一節點』導覽按鈕存在(作為提示)
+          newNextBtn.classList.remove("hidden");
+          newNextBtn.className = "flex items-center gap-2 px-6 py-3 bg-white text-indigo-600 hover:bg-indigo-50 border border-indigo-200 font-bold rounded-xl transition-all h-12";
+          newNextBtn.innerHTML = `下一個設定點 <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>`;
+          newNextBtn.onclick = () => selectNode(nextSIndex, nextNIndex);
+        }
+      }
+    };
+
+    // ==== 左側 Checkbox 直接點擊事件 ====
+    window.toggleStepStatus = function (id, event) {
+      if (event) event.stopPropagation();
+
+      const isChecked = event.target.checked;
+      if (isChecked) {
+        completedSteps.add(id);
+      } else {
+        completedSteps.delete(id);
+      }
+      updateProgress();
+      renderChecklist();
+
+      // 重新刷新右側以反映按鈕狀態
+      if (selectedStepIndex !== null && currentData.steps[selectedStepIndex].id === id) {
+        selectNode(selectedStepIndex, selectedNodeIndex || 0);
+      }
+    };
+
+    // ==== 更新上方完成度進度條 ====
+    function updateProgress() {
+      const total = currentData.steps.length;
+      const completed = completedSteps.size;
+
+      if (total === 0) return;
+
+      const percentage = Math.round((completed / total) * 100);
+
+      progressBar.style.width = `${percentage}%`;
+      progressText.textContent = `${percentage}%`;
+
+      if (percentage === 100) {
+        progressText.classList.replace("text-indigo-900", "text-green-600");
+        progressBar.classList.replace("from-indigo-500", "from-green-400");
+        progressBar.classList.replace("to-purple-500", "to-emerald-500");
+      } else {
+        progressText.classList.replace("text-green-600", "text-indigo-900");
+        progressBar.classList.replace("from-green-400", "from-indigo-500");
+        progressBar.classList.replace("to-emerald-500", "to-purple-500");
+      }
+    }
+
+    function hideGuide() {
+      emptyGuideState.classList.remove("hidden");
+      guideContentContainer.classList.add("hidden");
+    }
+
+    init();
+  </script>
+</body>
+
+</html>
