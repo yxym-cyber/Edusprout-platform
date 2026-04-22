@@ -7,7 +7,7 @@ export async function GET() {
         // 1. 初始化驗證 (從環境變數讀取)
         const serviceAccountAuth = new JWT({
             email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-            key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'), // 處理換行符號
+            key:  process.env.GOOGLE_PRIVATE_KEY?.replace(/^"|"$/g, '').replace(/\\n/g, '\n'), // 處理換行符號
             scopes: ['https://www.googleapis.com/auth/spreadsheets'],
         });
 
