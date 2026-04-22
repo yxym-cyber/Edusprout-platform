@@ -10,7 +10,7 @@ export default function AdminHubPage() {
     const router = useRouter();
 
     useEffect(() => {
-        if (!loading && (!user || (userData?.role !== "admin" && userData?.role !== "full-time"))) {
+        if (!loading && (!user || userData?.role !== "admin")) {
             router.push("/");
         }
     }, [user, userData, loading, router]);
@@ -23,7 +23,7 @@ export default function AdminHubPage() {
         );
     }
 
-    if (!user || (userData?.role !== "admin" && userData?.role !== "full-time")) return null;
+    if (!user || userData?.role !== "admin") return null;
 
     return (
         <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">

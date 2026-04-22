@@ -16,7 +16,9 @@ export default function HomePage() {
       // 角色分流跳轉
       if (userData?.role === "part-time") {
         router.push("/temp-system");
-      } else if (userData?.role === "admin" || userData?.role === "full-time") {
+      } else if (userData?.role === "full-time") {
+        router.push("/full-time");
+      } else if (userData?.role === "admin") {
         router.push("/admin");
       }
     }
