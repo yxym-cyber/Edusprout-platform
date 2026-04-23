@@ -2336,10 +2336,11 @@ function renderOverviewImage() {
         document.getElementById("guideTitle").textContent = "計畫書工作流 — 整體架構圖";
         document.getElementById("guideDesc").textContent = "以下為完整的工作流架構圖，說明各節點之間的串接關係與資料流向。每個 AI Agent 下方的 Chat Model 插槽，請接上團隊本地端的超級電腦模型。";
 
+        window._overviewSrc = currentData.overviewImg;
         document.getElementById("guideVisualArea").innerHTML = `
           <div style="width:100%;padding:8px;">
-            <img src="${currentData.overviewImg}" alt="整體工作流架構" style="width:100%;height:auto;border-radius:10px;border:1px solid #e2e8f0;background:#1a1a2e;cursor:zoom-in;" onclick="this.style.transform=this.style.transform?'':'scale(1.8) translateY(20%)'; this.style.transformOrigin='top center'; this.style.transition='transform 0.3s ease'; this.style.cursor=this.style.transform?'zoom-out':'zoom-in';" />
-            <p style="text-align:center;font-size:12px;color:#94a3b8;margin-top:10px;">點擊圖片可二次放大 · 再次點擊還原</p>
+            <img src="${currentData.overviewImg}" alt="整體工作流架構" data-lightbox="overview" style="width:100%;height:auto;border-radius:10px;border:1px solid #e2e8f0;background:#1a1a2e;cursor:zoom-in;" />
+            <p style="text-align:center;font-size:12px;color:#94a3b8;margin-top:10px;">點擊圖片全螢幕檢視 · 可縮放與拖曳</p>
           </div>`;
 
         // hide the guide table and action buttons — show only the visual
@@ -2640,6 +2641,14 @@ function renderOverviewImage() {
 
       init();
 
+</script>
+
+<script>
+  document.addEventListener('click', function(e) {
+    if (e.target.tagName === 'IMG' && e.target.dataset.lightbox === 'overview') {
+      window.parent.postMessage({ type: 'lightbox-open', src: window._overviewSrc || e.target.src }, '*');
+    }
+  });
 </script>
   </body>
 </html>

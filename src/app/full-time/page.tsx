@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import { db } from "@/lib/firebase";
@@ -25,6 +25,24 @@ export default function FullTimePage() {
     const [summaries, setSummaries] = useState<Record<string, any>>({});
     const [expandedMeeting, setExpandedMeeting] = useState<string | null>(null);
     const [loadingSummary, setLoadingSummary] = useState<string | null>(null);
+
+    // Lightbox state
+    const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+    const [lbScale, setLbScale] = useState(1);
+    const [lbPos, setLbPos] = useState({ x: 0, y: 0 });
+    const lbDrag = useRef({ active: false, startX: 0, startY: 0, startPosX: 0, startPosY: 0 });
+
+    useEffect(() => {
+        const handler = (e: MessageEvent) => {
+            if (e.data?.type === "lightbox-open") {
+                setLightboxSrc(e.data.src);
+                setLbScale(1);
+                setLbPos({ x: 0, y: 0 });
+            }
+        };
+        window.addEventListener("message", handler);
+        return () => window.removeEventListener("message", handler);
+    }, []);
 
     useEffect(() => {
         if (!loading && (!user || (userData?.role !== "admin" && userData?.role !== "full-time"))) {
@@ -167,6 +185,7 @@ export default function FullTimePage() {
     ];
 
     return (
+        <>
         <div className="min-h-screen bg-slate-50 flex flex-col text-slate-900 font-sans">
             {/* Navbar */}
             <nav className="bg-white border-b border-slate-200 px-8 py-4 flex justify-between items-center shadow-sm sticky top-0 z-10">
@@ -445,5 +464,57 @@ export default function FullTimePage() {
                 )}
             </div>
         </div>
+
+            {/* Lightbox */}
+            {lightboxSrc && (
+                <div
+                    className="fixed inset-0 z-[9999] bg-black/85 flex items-center justify-center select-none"
+                    onClick={() => setLightboxSrc(null)}
+                    onMouseMove={(e) => {
+                        if (!lbDrag.current.active) return;
+                        setLbPos({
+                            x: lbDrag.current.startPosX + (e.clientX - lbDrag.current.startX),
+                            y: lbDrag.current.startPosY + (e.clientY - lbDrag.current.startY),
+                        });
+                    }}
+                    onMouseUp={() => { lbDrag.current.active = false; }}
+                    onWheel={(e) => {
+                        e.preventDefault();
+                        setLbScale(s => Math.min(Math.max(s * (e.deltaY < 0 ? 1.12 : 0.89), 0.5), 8));
+                    }}
+                >
+                    <button
+                        onClick={() => setLightboxSrc(null)}
+                        className="fixed top-4 right-6 bg-white/20 hover:bg-white/40 text-white border-0 rounded-full w-11 h-11 text-2xl cursor-pointer z-[10000] flex items-center justify-center"
+                    >✕</button>
+                    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-[10000]">
+                        <button onClick={(e) => { e.stopPropagation(); setLbScale(s => Math.min(s * 1.3, 8)); }} className="bg-white/20 hover:bg-white/40 text-white border-0 rounded-full w-10 h-10 text-xl cursor-pointer">+</button>
+                        <button onClick={(e) => { e.stopPropagation(); setLbScale(s => Math.max(s / 1.3, 0.5)); }} className="bg-white/20 hover:bg-white/40 text-white border-0 rounded-full w-10 h-10 text-xl cursor-pointer">−</button>
+                        <button onClick={(e) => { e.stopPropagation(); setLbScale(1); setLbPos({ x: 0, y: 0 }); }} className="bg-white/20 hover:bg-white/40 text-white border-0 rounded-2xl px-4 h-10 text-xs font-bold cursor-pointer">重置</button>
+                    </div>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                        src={lightboxSrc}
+                        alt="放大檢視"
+                        draggable={false}
+                        onClick={(e) => e.stopPropagation()}
+                        onMouseDown={(e) => {
+                            e.preventDefault();
+                            lbDrag.current = { active: true, startX: e.clientX, startY: e.clientY, startPosX: lbPos.x, startPosY: lbPos.y };
+                        }}
+                        style={{
+                            maxWidth: "90vw",
+                            maxHeight: "85vh",
+                            objectFit: "contain",
+                            borderRadius: 8,
+                            boxShadow: "0 8px 40px rgba(0,0,0,0.5)",
+                            cursor: lbDrag.current.active ? "grabbing" : "grab",
+                            transform: `translate(${lbPos.x}px, ${lbPos.y}px) scale(${lbScale})`,
+                            transition: "none",
+                        }}
+                    />
+                </div>
+            )}
+        </>
     );
 }
