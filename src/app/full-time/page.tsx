@@ -36,7 +36,7 @@ export default function FullTimePage() {
 
     const fetchMeetings = async () => {
         try {
-            const q = query(collection(db, "meetings"), orderBy("createdAt", "desc"));
+            const q = query(collection(db, "meetings"), where("createdBy", "==", user?.email), orderBy("createdAt", "desc"));
             const querySnapshot = await getDocs(q);
             const m = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             setMeetings(m);
@@ -213,51 +213,18 @@ export default function FullTimePage() {
             <div className="flex-1 flex flex-col">
                 {activeTab === "n8n" && (
                     <iframe
-                        src="/n8n_guide.html"
+                        src="/n8n_guide_modified_5.html"
                         className="w-full border-0"
-                        style={{ minHeight: "calc(100vh - 161px)" }}
-                        title="n8n 教學"
-                        onLoad={(e) => {
-                            const iframe = e.currentTarget;
-                            const resize = () => {
-                                try {
-                                    const h = iframe.contentDocument?.body?.scrollHeight;
-                                    if (h) iframe.style.height = h + "px";
-                                } catch {}
-                            };
-                            resize();
-                            // 監聽內容變動（點選步驟時右側面板展開）
-                            try {
-                                const observer = new MutationObserver(resize);
-                                observer.observe(iframe.contentDocument!.body, {
-                                    childList: true, subtree: true, attributes: true
-                                });
-                            } catch {}
-                        }}
+                        style={{ height: "calc(100vh - 161px)" }}
+                        title="n8n 工作流教學"
                     />
                 )}
                 {activeTab === "ai-tools" && (
                     <iframe
-                        src="/n8n_guide.html?tab=ai"
+                        src="/n8n_guide_modified_5.html?tab=ai"
                         className="w-full border-0"
-                        style={{ minHeight: "calc(100vh - 161px)" }}
+                        style={{ height: "calc(100vh - 161px)" }}
                         title="AI 工具教學"
-                        onLoad={(e) => {
-                            const iframe = e.currentTarget;
-                            const resize = () => {
-                                try {
-                                    const h = iframe.contentDocument?.body?.scrollHeight;
-                                    if (h) iframe.style.height = h + "px";
-                                } catch {}
-                            };
-                            resize();
-                            try {
-                                const observer = new MutationObserver(resize);
-                                observer.observe(iframe.contentDocument!.body, {
-                                    childList: true, subtree: true, attributes: true
-                                });
-                            } catch {}
-                        }}
                     />
                 )}
                 {activeTab === "showcase" && (
