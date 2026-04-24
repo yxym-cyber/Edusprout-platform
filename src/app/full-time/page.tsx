@@ -34,6 +34,7 @@ export default function FullTimePage() {
 
     useEffect(() => {
         const handler = (e: MessageEvent) => {
+            if (e.origin !== window.location.origin) return;
             if (e.data?.type === "lightbox-open") {
                 setLightboxSrc(e.data.src);
                 setLbScale(1);
@@ -99,6 +100,10 @@ export default function FullTimePage() {
         if (!file) return;
         if (file.type !== "text/plain" && !file.name.endsWith(".txt")) {
             setMessage({ type: "error", text: "請選擇 .txt 格式的檔案" });
+            return;
+        }
+        if (file.size > 5 * 1024 * 1024) {
+            setMessage({ type: "error", text: "檔案過大，請上傳 5MB 以內的檔案" });
             return;
         }
         setFileName(file.name);

@@ -62,9 +62,14 @@ export default function AttendancePage() {
         if (!user) return;
         setActionLoading(true);
         try {
+            const { getAuth } = await import("firebase/auth");
+            const token = await getAuth().currentUser?.getIdToken();
             const res = await fetch('/api/check-in', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+                },
                 body: JSON.stringify({
                     action,
                     user: `${user.displayName || user.email} (${userData.role})`

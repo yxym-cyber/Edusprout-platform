@@ -1,10 +1,30 @@
 import { GoogleSpreadsheet } from 'google-spreadsheet';
 import { JWT } from 'google-auth-library';
 import { NextResponse } from 'next/server';
+import { adminAuth } from '@/lib/firebase-admin';
 
 export async function POST(req: Request) {
     try {
+        // 驗證身份
+        const authHeader = req.headers.get('Authorization');
+        if (!authHeader?.startsWith('Bearer ')) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+        try {
+            await adminAuth.verifyIdToken(authHeader.slice(7));
+        } catch {
+            return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
+        }
+
         const { action, user } = await req.json();
+
+        // Input 驗證
+        if (!['check-in', 'check-out'].includes(action)) {
+            return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
+        }
+        if (typeof user !== 'string' || user.length === 0 || user.length > 100) {
+            return NextResponse.json({ error: 'Invalid user' }, { status: 400 });
+        }
 
         // 使用伺服器端時間
         const now = new Date();
