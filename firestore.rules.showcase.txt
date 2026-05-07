@@ -1,0 +1,59 @@
+// 將下面 match 區塊加入到你 firestore.rules 既有的 match /databases/{database}/documents { ... } 內。
+// 設定路徑：Firebase Console → Firestore Database → 規則 (Rules)
+//
+// 規則重點：
+// - 只有「白名單內的已登入使用者」可以瀏覽 / 發文 / 留言 / 按讚
+// - 只有作者本人或 admin 可以刪除自己的貼文與留言
+// - 按讚 (likes / likedBy) 任何登入者都能更新該欄位
+//
+// 注意：以下使用 isWhitelisted() 函式，會去查 whitelist/{email} 是否存在。
+// 若你目前沒有用到 whitelist，就把 isWhitelisted() 換成 request.auth != null。
+
+function isSignedIn() {
+  return request.auth != null;
+}
+
+function isWhitelisted() {
+  return isSignedIn() &&
+    exists(/databases/$(database)/documents/whitelist/$(request.auth.token.email));
+}
+
+function isAdmin() {
+  return isWhitelisted() &&
+    get(/databases/$(database)/documents/whitelist/$(request.auth.token.email)).data.role == 'admin';
+}
+
+function isAuthor(resourceData) {
+  return isSignedIn() && resourceData.authorEmail == request.auth.token.email;
+}
+
+match /posts/{postId} {
+  // 任何白名單成員都能讀
+  allow read: if isWhitelisted();
+
+  // 建立貼文：必須是登入的白名單成員，且 authorEmail 必須是自己
+  allow create: if isWhitelisted()
+    && request.resource.data.authorEmail == request.auth.token.email
+    && request.resource.data.likes == 0
+    && request.resource.data.likedBy.size() == 0;
+
+  // 更新：只允許「按讚」相關欄位變動，或作者/admin 改自己的內文
+  allow update: if isWhitelisted() && (
+    // 案例 A：只更新 likes / likedBy
+    (request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly(['likes', 'likedBy']))
+    // 案例 B：作者或 admin 編輯自己的文
+    || (isAuthor(resource.data) || isAdmin())
+  );
+
+  // 刪除：只有作者或 admin
+  allow delete: if isAuthor(resource.data) || isAdmin();
+
+  // 子集合：留言
+  match /comments/{commentId} {
+    allow read: if isWhitelisted();
+    allow create: if isWhitelisted()
+      && request.resource.data.authorEmail == request.auth.token.email;
+    allow delete: if isAuthor(resource.data) || isAdmin();
+  }
+}

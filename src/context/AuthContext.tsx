@@ -80,14 +80,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const loginWithGoogle = async () => {
         const provider = new GoogleAuthProvider();
+        const fallbackCodes = [
+            "auth/popup-blocked",
+            "auth/popup-closed-by-user",
+            "auth/cancelled-popup-request",
+            "auth/internal-error",
+        ];
         try {
             console.log("Starting Google login popup...");
             await signInWithPopup(auth, provider);
             console.log("Login popup successful");
         } catch (error: any) {
             console.error("Login popup failed:", error);
-            if (error.code === "auth/popup-closed-by-user" || error.code === "auth/internal-error") {
-                console.warn("Popup blocked or closed. Falling back to redirect...");
+            if (fallbackCodes.includes(error?.code)) {
+                console.warn(`Popup unavailable (${error.code})，改用 redirect 登入...`);
                 try {
                     await signInWithRedirect(auth, provider);
                 } catch (redirectError) {

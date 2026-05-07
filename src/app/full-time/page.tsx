@@ -5,8 +5,9 @@ import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import { db } from "@/lib/firebase";
 import { collection, addDoc, serverTimestamp, query, orderBy, where, getDocs } from "firebase/firestore";
+import ShowcaseFeed from "./ShowcaseFeed";
 
-type Tab = "n8n" | "ai-tools" | "showcase" | "meeting";
+type Tab = "n8n" | "ai-tools" | "prompts" | "showcase" | "meeting";
 
 export default function FullTimePage() {
     const { user, userData, loading, logout } = useAuth();
@@ -185,6 +186,7 @@ export default function FullTimePage() {
     const tabs: { id: Tab; label: string; emoji: string }[] = [
         { id: "n8n", label: "n8n 教學", emoji: "🔧" },
         { id: "ai-tools", label: "AI 工具教學", emoji: "🤖" },
+        { id: "prompts", label: "Prompt 資料庫", emoji: "💡" },
         { id: "showcase", label: "成果動態牆", emoji: "🌟" },
         { id: "meeting", label: "會議紀錄生成", emoji: "📝" },
     ];
@@ -215,7 +217,7 @@ export default function FullTimePage() {
 
             {/* Tab bar */}
             <div className="bg-slate-100 border-b border-slate-200 px-6 py-4">
-                <div className="max-w-6xl mx-auto grid grid-cols-4 gap-3">
+                <div className="max-w-6xl mx-auto grid grid-cols-5 gap-3">
                     {tabs.map((tab) => (
                         <button
                             key={tab.id}
@@ -251,14 +253,88 @@ export default function FullTimePage() {
                         title="AI 工具教學"
                     />
                 )}
-                {activeTab === "showcase" && (
-                    <iframe
-                        src="/showcase_feed.html"
-                        className="w-full border-0 flex-1"
-                        style={{ height: "calc(100vh - 161px)" }}
-                        title="成果動態牆"
-                    />
+                {activeTab === "prompts" && (
+                    <div className="max-w-6xl mx-auto w-full py-12 px-6">
+                        <div className="bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden">
+                            <header className="bg-blue-900 px-8 py-6 text-white">
+                                <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+                                    <span>💡</span> Prompt 資料庫
+                                </h1>
+                                <p className="text-blue-100 text-sm mt-1">收錄常用 Prompt 範本，點擊即可複製使用</p>
+                            </header>
+
+                            <div className="p-8 space-y-5">
+                                {[
+                                    {
+                                        category: "會議紀錄",
+                                        title: "逐字稿議題化整理",
+                                        desc: "將會議逐字稿依議題重組，產出結構化紀錄。",
+                                        content: "你是一位專業的會議紀錄撰寫者。請依下列規範整理會議逐字稿：\n1. 將內容依議題分類，合併分散在不同段落的相同議題。\n2. 每個議題需包含：議題標題、背景說明、研議要點、共識決議。\n3. 條列待辦事項並標註負責單位與時限。\n4. 以正式公文語氣撰寫，避免主觀情緒字眼。",
+                                    },
+                                    {
+                                        category: "教學設計",
+                                        title: "課程大綱生成器",
+                                        desc: "依主題快速產出 4 週課程大綱結構。",
+                                        content: "請依以下主題生成 4 週課程大綱：\n主題：{請填入主題}\n對象：{請填入學習對象}\n\n每週需提供：\n- 學習目標（3 點）\n- 核心概念\n- 課堂活動建議\n- 評量方式\n- 延伸閱讀",
+                                    },
+                                    {
+                                        category: "AI 工具應用",
+                                        title: "n8n 工作流規劃",
+                                        desc: "協助你規劃自動化流程節點。",
+                                        content: "我想用 n8n 自動化以下流程：\n{請描述目的與來源/目標系統}\n\n請列出：\n1. 需要哪些節點（trigger / action / 邏輯）\n2. 每個節點的設定要點\n3. 可能遇到的錯誤與處理方式\n4. 一個簡單的測試方法",
+                                    },
+                                    {
+                                        category: "公文撰寫",
+                                        title: "會議通知公文",
+                                        desc: "快速產出符合公文格式的會議通知。",
+                                        content: "請依下列資訊撰寫會議通知公文（受文者：相關單位）：\n會議名稱：\n時間：\n地點：\n召集人：\n議程：\n備註：\n\n格式需符合公文三段式：主旨、說明、辦法。",
+                                    },
+                                    {
+                                        category: "資料摘要",
+                                        title: "長篇文件摘要",
+                                        desc: "將長篇文件壓縮成重點摘要。",
+                                        content: "請將以下內容摘要為：\n1. 一句話總結（30 字內）\n2. 三點核心觀點\n3. 兩個值得進一步追問的問題\n\n內容：\n{請貼上原始內容}",
+                                    },
+                                ].map((p, i) => (
+                                    <div
+                                        key={i}
+                                        className="bg-slate-50 rounded-xl border border-slate-200 hover:border-blue-400 hover:shadow-md transition-all p-5"
+                                    >
+                                        <div className="flex justify-between items-start gap-4 mb-2">
+                                            <div>
+                                                <span className="inline-block text-[11px] font-bold uppercase tracking-wider text-blue-700 bg-blue-100 px-2 py-0.5 rounded mb-1">
+                                                    {p.category}
+                                                </span>
+                                                <h3 className="text-base font-black text-slate-800">{p.title}</h3>
+                                                <p className="text-xs text-slate-500 mt-0.5">{p.desc}</p>
+                                            </div>
+                                            <button
+                                                onClick={() => {
+                                                    navigator.clipboard.writeText(p.content);
+                                                    setMessage({ type: "success", text: `已複製：${p.title}` });
+                                                    setTimeout(() => setMessage({ type: "", text: "" }), 2000);
+                                                }}
+                                                className="shrink-0 text-xs font-bold py-2 px-3 bg-white border border-blue-900 text-blue-900 rounded hover:bg-blue-900 hover:text-white transition-all flex items-center gap-1"
+                                            >
+                                                📋 複製
+                                            </button>
+                                        </div>
+                                        <pre className="mt-3 text-xs text-slate-700 bg-white border border-slate-200 rounded-lg p-3 whitespace-pre-wrap font-mono leading-relaxed">
+{p.content}
+                                        </pre>
+                                    </div>
+                                ))}
+
+                                {message.text && (
+                                    <div className={`fixed bottom-6 right-6 p-4 rounded-md text-sm font-medium shadow-lg ${message.type === "success" ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-700 border border-red-200"}`}>
+                                        {message.text}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
                 )}
+                {activeTab === "showcase" && <ShowcaseFeed />}
                 {activeTab === "meeting" && (
                     <div className="max-w-2xl mx-auto w-full py-12 px-6">
                         <div className="bg-white rounded-lg border border-slate-200 shadow-xl overflow-hidden">
