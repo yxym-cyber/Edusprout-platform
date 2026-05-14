@@ -4,7 +4,8 @@ import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import { db } from "@/lib/firebase";
-import { collection, addDoc, serverTimestamp, query, orderBy, where, getDocs } from "firebase/firestore";
+import { collection, addDoc, doc, getDoc, serverTimestamp, query, orderBy, where, getDocs } from "firebase/firestore";
+import { generateMeetingSummary, LM_STUDIO_MODEL } from "@/lib/lmStudio";
 import ShowcaseFeed from "./ShowcaseFeed";
 
 type Tab = "n8n" | "ai-tools" | "prompts" | "showcase" | "meeting";
@@ -153,28 +154,38 @@ export default function FullTimePage() {
         setIsGenerating(meetingId);
         setMessage({ type: "", text: "" });
         try {
-            // 取得使用者 ID Token 傳給 API，讓伺服器以使用者身份存取 Firestore
-            const { getAuth } = await import("firebase/auth");
-            const token = await getAuth().currentUser?.getIdToken();
-            const response = await fetch("/api/generate-summary", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    ...(token ? { "Authorization": `Bearer ${token}` } : {}),
-                },
-                body: JSON.stringify({ meetingId, sourceId }),
-            });
-            const data = await response.json();
-            if (data.success) {
-                setMessage({ type: "success", text: "✨ AI 紀錄生成成功！" });
-                setSummaries(prev => ({ ...prev, [meetingId]: data.data }));
-                setExpandedMeeting(meetingId);
-            } else {
-                throw new Error(data.error || "生成失敗");
+            // 1. 從 Firestore 直接讀逐字稿（瀏覽器端，使用 firebase client SDK）
+            setMessage({ type: "info", text: "📄 讀取逐字稿..." });
+            const sourceSnap = await getDoc(doc(db, "meeting_sources", sourceId));
+            if (!sourceSnap.exists()) {
+                throw new Error("找不到逐字稿");
             }
+            const transcriptText: string | undefined = sourceSnap.data()?.transcript_text;
+            if (!transcriptText) {
+                throw new Error("逐字稿內容為空");
+            }
+
+            // 2. 直接從瀏覽器呼叫桌機 LM Studio（透過 ngrok）
+            setMessage({ type: "info", text: "🤖 呼叫本地模型生成中（可能需 1-3 分鐘）..." });
+            const parsedData = await generateMeetingSummary(transcriptText);
+
+            // 3. 寫回 Firestore
+            setMessage({ type: "info", text: "💾 儲存結果..." });
+            await addDoc(collection(db, "meeting_generated"), {
+                meetingId,
+                sourceId,
+                data: parsedData,
+                version: 1,
+                model: LM_STUDIO_MODEL,
+                createdAt: serverTimestamp(),
+            });
+
+            setMessage({ type: "success", text: "✨ AI 紀錄生成成功！" });
+            setSummaries(prev => ({ ...prev, [meetingId]: parsedData }));
+            setExpandedMeeting(meetingId);
         } catch (error: any) {
             console.error("Generation error:", error);
-            setMessage({ type: "error", text: `生成失敗: ${error.message}` });
+            setMessage({ type: "error", text: `生成失敗: ${error.message || "未知錯誤"}` });
         } finally {
             setIsGenerating(null);
         }
