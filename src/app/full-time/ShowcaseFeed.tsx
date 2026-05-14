@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import {
     collection,
     addDoc,
@@ -110,6 +110,50 @@ export default function ShowcaseFeed() {
         });
         return () => unsub();
     }, []);
+
+    // ===== 儀表板統計 =====
+    const stats = useMemo(() => {
+        const total = posts.length;
+        const scenarioCount: Record<string, number> = {};
+        const toolCount: Record<string, number> = {};
+        const userCount: Record<string, { name: string; photo: string | null; count: number }> = {};
+
+        posts.forEach((p) => {
+            if (p.scenario) {
+                scenarioCount[p.scenario] = (scenarioCount[p.scenario] || 0) + 1;
+            }
+            (p.tools || []).forEach((t) => {
+                toolCount[t] = (toolCount[t] || 0) + 1;
+            });
+            const key = p.authorEmail || p.authorName || "unknown";
+            if (!userCount[key]) {
+                userCount[key] = { name: p.authorName || "匿名", photo: p.authorPhoto || null, count: 0 };
+            }
+            userCount[key].count += 1;
+        });
+
+        const scenarioRanking = Object.entries(scenarioCount)
+            .sort((a, b) => b[1] - a[1]);
+        const toolRanking = Object.entries(toolCount)
+            .sort((a, b) => b[1] - a[1]);
+        const userRanking = Object.entries(userCount)
+            .map(([email, v]) => ({ email, ...v }))
+            .sort((a, b) => b.count - a.count);
+
+        return {
+            total,
+            scenarioRanking,
+            toolRanking,
+            userRanking,
+            topUser: userRanking[0] || null,
+            topTool: toolRanking[0] || null,
+            uniqueTools: toolRanking.length,
+            uniqueScenarios: scenarioRanking.length,
+        };
+    }, [posts]);
+
+    // 取得最踴躍使用者的 email（用來顯示皇冠）
+    const topSharerEmail = stats.topUser?.email;
 
     useEffect(() => {
         return () => {
@@ -358,6 +402,172 @@ export default function ShowcaseFeed() {
                     </button>
                 </div>
 
+                {/* ===== 儀表板（最顯眼的英雄區塊）===== */}
+                {!loading && posts.length > 0 && (
+                    <section className="mb-8">
+                        {/* 主視覺：三個 KPI + 分享之王 */}
+                        <div className="relative bg-gradient-to-br from-blue-900 via-indigo-900 to-purple-900 rounded-3xl shadow-2xl overflow-hidden mb-4">
+                            {/* 背景裝飾 */}
+                            <div className="absolute top-0 right-0 w-64 h-64 bg-yellow-400/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/4" />
+                            <div className="absolute bottom-0 left-0 w-64 h-64 bg-pink-400/10 rounded-full blur-3xl translate-y-1/2 -translate-x-1/4" />
+
+                            <div className="relative p-6 md:p-8">
+                                <div className="flex items-center gap-2 mb-5">
+                                    <span className="text-2xl">📊</span>
+                                    <h3 className="text-lg md:text-xl font-black text-white tracking-wide">
+                                        平台統計儀表板
+                                    </h3>
+                                    <span className="ml-auto text-[10px] font-bold uppercase tracking-widest text-white/50">
+                                        Live · 即時更新
+                                    </span>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                    {/* 案例總數 */}
+                                    <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-5 border border-white/20">
+                                        <p className="text-xs font-bold text-white/70 uppercase tracking-wider mb-2">
+                                            📚 案例總數
+                                        </p>
+                                        <p className="text-4xl md:text-5xl font-black text-white">
+                                            {stats.total}
+                                            <span className="text-base font-bold text-white/60 ml-1">篇</span>
+                                        </p>
+                                        <p className="text-xs text-white/60 mt-1">
+                                            涵蓋 {stats.uniqueScenarios} 種應用場景
+                                        </p>
+                                    </div>
+
+                                    {/* 分享之王 */}
+                                    {stats.topUser && (
+                                        <div className="bg-gradient-to-br from-yellow-400/20 to-orange-500/20 backdrop-blur-sm rounded-2xl p-5 border-2 border-yellow-300/40 relative overflow-hidden">
+                                            <div className="absolute -top-3 -right-3 text-5xl rotate-12 opacity-30">👑</div>
+                                            <p className="text-xs font-bold text-yellow-200 uppercase tracking-wider mb-2 flex items-center gap-1">
+                                                <span>👑</span> 分享之王
+                                            </p>
+                                            <div className="flex items-center gap-2.5">
+                                                {stats.topUser.photo ? (
+                                                    /* eslint-disable-next-line @next/next/no-img-element */
+                                                    <img src={stats.topUser.photo} alt="" className="w-10 h-10 rounded-full ring-2 ring-yellow-300" />
+                                                ) : (
+                                                    <div className="w-10 h-10 rounded-full bg-yellow-400 text-blue-900 flex items-center justify-center font-black ring-2 ring-yellow-300">
+                                                        {(stats.topUser.name || "?")[0]}
+                                                    </div>
+                                                )}
+                                                <div className="min-w-0">
+                                                    <p className="text-base font-black text-white truncate">
+                                                        {stats.topUser.name}
+                                                    </p>
+                                                    <p className="text-xs text-yellow-200 font-bold">
+                                                        共分享 {stats.topUser.count} 篇
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* 熱門工具 */}
+                                    {stats.topTool && (
+                                        <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-5 border border-white/20">
+                                            <p className="text-xs font-bold text-white/70 uppercase tracking-wider mb-2">
+                                                🔥 最熱門工具
+                                            </p>
+                                            <p className="text-2xl md:text-3xl font-black text-white truncate">
+                                                {stats.topTool[0]}
+                                            </p>
+                                            <p className="text-xs text-white/60 mt-1">
+                                                被使用 <span className="font-bold text-white">{stats.topTool[1]}</span> 次 · 共 {stats.uniqueTools} 種工具
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 兩欄圖表：分享類型 + 工具排行 */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/* 分享類型分布 */}
+                            <div className="bg-white rounded-2xl border border-slate-200 shadow-md p-5">
+                                <div className="flex items-center gap-2 mb-4">
+                                    <span className="text-lg">📋</span>
+                                    <h4 className="text-sm font-black text-slate-800">分享類型分布</h4>
+                                    <span className="ml-auto text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                        {stats.uniqueScenarios} 類
+                                    </span>
+                                </div>
+                                <div className="space-y-2.5">
+                                    {stats.scenarioRanking.slice(0, 6).map(([name, count], idx) => {
+                                        const max = stats.scenarioRanking[0]?.[1] || 1;
+                                        const pct = (count / max) * 100;
+                                        const colors = [
+                                            "from-emerald-500 to-emerald-400",
+                                            "from-teal-500 to-teal-400",
+                                            "from-cyan-500 to-cyan-400",
+                                            "from-sky-500 to-sky-400",
+                                            "from-blue-500 to-blue-400",
+                                            "from-indigo-500 to-indigo-400",
+                                        ];
+                                        return (
+                                            <div key={name}>
+                                                <div className="flex justify-between items-center mb-1">
+                                                    <span className="text-xs font-bold text-slate-700">
+                                                        #{name}
+                                                    </span>
+                                                    <span className="text-xs font-black text-slate-500">
+                                                        {count}
+                                                    </span>
+                                                </div>
+                                                <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                                                    <div
+                                                        className={`h-full bg-gradient-to-r ${colors[idx % colors.length]} rounded-full transition-all duration-500`}
+                                                        style={{ width: `${pct}%` }}
+                                                    />
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            {/* 工具使用排行 */}
+                            <div className="bg-white rounded-2xl border border-slate-200 shadow-md p-5">
+                                <div className="flex items-center gap-2 mb-4">
+                                    <span className="text-lg">🛠️</span>
+                                    <h4 className="text-sm font-black text-slate-800">最常使用的工具</h4>
+                                    <span className="ml-auto text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                        Top {Math.min(6, stats.uniqueTools)}
+                                    </span>
+                                </div>
+                                <div className="space-y-2.5">
+                                    {stats.toolRanking.slice(0, 6).map(([name, count], idx) => {
+                                        const max = stats.toolRanking[0]?.[1] || 1;
+                                        const pct = (count / max) * 100;
+                                        const medals = ["🥇", "🥈", "🥉"];
+                                        return (
+                                            <div key={name}>
+                                                <div className="flex justify-between items-center mb-1">
+                                                    <span className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                                                        {medals[idx] || <span className="text-slate-400 w-4 text-center">{idx + 1}</span>}
+                                                        {name}
+                                                    </span>
+                                                    <span className="text-xs font-black text-slate-500">
+                                                        {count} 次
+                                                    </span>
+                                                </div>
+                                                <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                                                    <div
+                                                        className="h-full bg-gradient-to-r from-blue-600 to-blue-400 rounded-full transition-all duration-500"
+                                                        style={{ width: `${pct}%` }}
+                                                    />
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                )}
+
                 {/* ===== 上傳表單 ===== */}
                 {showUpload && (
                     <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-slate-200 shadow-md p-6 mb-6 space-y-5">
@@ -580,7 +790,17 @@ export default function ShowcaseFeed() {
                                                 </div>
                                             )}
                                             <div>
-                                                <p className="text-sm font-bold text-slate-800">{post.authorName}</p>
+                                                <p className="text-sm font-bold text-slate-800 flex items-center gap-1">
+                                                    {post.authorEmail === topSharerEmail && (
+                                                        <span
+                                                            title="分享之王"
+                                                            className="text-base leading-none drop-shadow-[0_0_4px_rgba(250,204,21,0.6)]"
+                                                        >
+                                                            👑
+                                                        </span>
+                                                    )}
+                                                    {post.authorName}
+                                                </p>
                                                 <p className="text-xs text-slate-400">{formatTime(post.createdAt)}</p>
                                             </div>
                                         </div>
