@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 工具對照表</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --primary: #2d3a8c;
+  --primary-light: #eef0fb;
+  --primary-mid: #4a5bc4;
+  --bg: #f0f2f8;
+  --bg-card: #ffffff;
+  --text: #1a1f3a;
+  --text2: #5a6080;
+  --text3: #9aa0bc;
+  --border: #e2e5f0;
+  --border2: #c8ccdf;
+  --shadow: 0 2px 12px rgba(45,58,140,0.08);
+  --shadow-hover: 0 6px 24px rgba(45,58,140,0.15);
+  --radius: 14px;
+  --radius-sm: 8px;
+  --cat-chat: #2d3a8c;
+  --cat-search: #0891b2;
+  --cat-image: #be185d;
+  --cat-code: #d97706;
+  --cat-agent: #7c3aed;
+  --cat-doc: #059669;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  font-family: 'Noto Sans TC', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+.page-wrap {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 2rem 2rem 4rem;
+}
+
+/* Page header */
+.page-header {
+  margin-bottom: 2rem;
+}
+
+.page-title {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: .4rem;
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+}
+
+.page-title-icon {
+  font-size: 1.5rem;
+}
+
+.page-subtitle {
+  font-size: .9rem;
+  color: var(--text2);
+  line-height: 1.7;
+}
+
+/* Stats row */
+.stats-row {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.stat-chip {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 100px;
+  padding: 6px 14px;
+  font-size: .8rem;
+  color: var(--text2);
+  box-shadow: var(--shadow);
+}
+
+.stat-chip strong {
+  color: var(--primary);
+  font-weight: 700;
+}
+
+/* Intro card */
+.intro-card {
+  background: var(--primary);
+  border-radius: var(--radius);
+  padding: 1.5rem 2rem;
+  margin-bottom: 2rem;
+  color: white;
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  flex-wrap: wrap;
+}
+
+.intro-card-text h2 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: .4rem;
+}
+
+.intro-card-text p {
+  font-size: .88rem;
+  opacity: .85;
+  line-height: 1.7;
+  max-width: 600px;
+}
+
+.intro-tip {
+  background: rgba(255,255,255,.12);
+  border-radius: var(--radius-sm);
+  padding: .8rem 1.2rem;
+  font-size: .82rem;
+  line-height: 1.7;
+  min-width: 240px;
+}
+
+.intro-tip strong { display: block; margin-bottom: .3rem; font-size: .85rem; }
+
+/* Filter bar */
+.filter-bar {
+  display: flex;
+  gap: .5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+  align-items: center;
+}
+
+.filter-label {
+  font-size: .8rem;
+  color: var(--text3);
+  margin-right: .2rem;
+}
+
+.filter-btn {
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: .8rem;
+  padding: 6px 14px;
+  border-radius: 100px;
+  border: 1.5px solid var(--border2);
+  background: var(--bg-card);
+  color: var(--text2);
+  cursor: pointer;
+  transition: all .18s;
+  display: flex;
+  align-items: center;
+  gap: .3rem;
+}
+
+.filter-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.filter-btn.active {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+  font-weight: 500;
+}
+
+/* Tool grid */
+.tool-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+  gap: 1.2rem;
+}
+
+.tool-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.4rem;
+  box-shadow: var(--shadow);
+  transition: transform .2s, box-shadow .2s;
+  position: relative;
+  overflow: hidden;
+}
+
+.tool-card::before {
+  content:'';
+  position:absolute;
+  top:0; left:0; right:0;
+  height:3px;
+  background: var(--accent-color, var(--primary));
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+
+.tool-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-hover);
+}
+
+.tool-card[data-cat="chat"]   { --accent-color: var(--cat-chat); }
+.tool-card[data-cat="search"] { --accent-color: var(--cat-search); }
+.tool-card[data-cat="image"]  { --accent-color: var(--cat-image); }
+.tool-card[data-cat="code"]   { --accent-color: var(--cat-code); }
+.tool-card[data-cat="agent"]  { --accent-color: var(--cat-agent); }
+.tool-card[data-cat="doc"]    { --accent-color: var(--cat-doc); }
+
+.card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: .9rem;
+  margin-bottom: 1rem;
+}
+
+.tool-icon {
+  width: 42px; height: 42px;
+  border-radius: 10px;
+  background: var(--primary-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.tool-head-text { flex:1; }
+
+.tool-name {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 1px;
+}
+
+.tool-maker {
+  font-size: .75rem;
+  color: var(--text3);
+}
+
+.card-badges {
+  display: flex;
+  flex-direction: column;
+  gap: .25rem;
+  align-items: flex-end;
+}
+
+.badge {
+  font-size: 11px;
+  padding: 2px 9px;
+  border-radius: 100px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.badge-free      { background: #dcfce7; color: #166534; }
+.badge-paid      { background: #fef9c3; color: #854d0e; }
+.badge-freemium  { background: #e0e7ff; color: #3730a3; }
+
+.cat-badge {
+  font-size: 11px;
+  padding: 2px 9px;
+  border-radius: 100px;
+  font-weight: 500;
+  background: color-mix(in srgb, var(--accent-color) 12%, white);
+  color: var(--accent-color);
+  border: 1px solid color-mix(in srgb, var(--accent-color) 25%, white);
+}
+
+.tool-desc {
+  font-size: .85rem;
+  color: var(--text2);
+  line-height: 1.75;
+  margin-bottom: 1rem;
+}
+
+/* Use case tags */
+.use-cases {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .35rem;
+  margin-bottom: 1rem;
+}
+
+.use-tag {
+  font-size: 11.5px;
+  padding: 3px 10px;
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text2);
+  border: 1px solid var(--border);
+}
+
+/* Metrics */
+.metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: .5rem;
+  padding-top: .9rem;
+  border-top: 1px solid var(--border);
+}
+
+.metric { text-align: center; }
+
+.metric-label {
+  font-size: 10.5px;
+  color: var(--text3);
+  margin-bottom: 5px;
+}
+
+.rec-score {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.rec-score span { font-size: .7rem; color: var(--text3); font-weight: 400; }
+
+.diff-bar {
+  display: flex;
+  justify-content: center;
+  gap: 3px;
+}
+
+.diff-dot {
+  width: 9px; height: 9px;
+  border-radius: 50%;
+}
+
+.diff-dot.on  { background: var(--accent-color, var(--primary)); }
+.diff-dot.off { background: var(--border); }
+
+.stars {
+  display: flex;
+  justify-content: center;
+  gap: 1px;
+}
+
+.star { font-size: 13px; }
+.star.on  { color: #f59e0b; }
+.star.off { color: var(--border2); }
+
+/* Legend */
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .6rem;
+  margin-bottom: 1.5rem;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+  font-size: .78rem;
+  color: var(--text2);
+}
+
+.legend-dot {
+  width: 9px; height: 9px;
+  border-radius: 50%;
+}
+
+/* Beginner path */
+.beginner-path {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.4rem 1.6rem;
+  margin-top: 2rem;
+  box-shadow: var(--shadow);
+}
+
+.beginner-path h3 {
+  font-size: .95rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+}
+
+.path-steps {
+  display: flex;
+  gap: .6rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.path-step {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  background: var(--primary-light);
+  border-radius: var(--radius-sm);
+  padding: .5rem .9rem;
+  font-size: .83rem;
+  color: var(--primary);
+  font-weight: 500;
+}
+
+.path-step-num {
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.path-arrow {
+  color: var(--text3);
+  font-size: 1rem;
+}
+
+.path-note {
+  font-size: .8rem;
+  color: var(--text2);
+  margin-top: .8rem;
+  line-height: 1.6;
+}
+
+.hidden { display: none !important; }
+
+@media (max-width: 600px) {
+  .tool-grid { grid-template-columns: 1fr; }
+  .intro-card { flex-direction: column; gap: 1rem; }
+}
+</style>
+</head>
+<body>
+<div class="page-wrap">
+
+  <div class="page-header">
+    <div class="page-title">
+      <span class="page-title-icon">🗂️</span>
+      AI 工具對照表
+    </div>
+    <div class="page-subtitle">精選 12 款實用 AI 工具，了解各工具適合的使用情境、上手難易度與推薦程度</div>
+  </div>
+
+  <div class="stats-row">
+    <div class="stat-chip"><strong>12</strong> 款精選工具</div>
+    <div class="stat-chip"><strong>6</strong> 種使用情境</div>
+    <div class="stat-chip">🎯 適合大學新生與職場新鮮人</div>
+    <div class="stat-chip">📅 2025 年版</div>
+  </div>
+
+  <div class="intro-card">
+    <div class="intro-card-text">
+      <h2>不知道從哪開始學 AI？</h2>
+      <p>以下工具依使用情境分類，每張卡片列出推薦程度、上手難易度與主要使用場景。建議從推薦分數高、難易度低的工具優先入手。</p>
+    </div>
+    <div class="intro-tip">
+      <strong>🎯 新手建議起點</strong>
+      ChatGPT 或 Claude → Perplexity → NotebookLM → Gamma<br>
+      四個工具皆有免費版，可涵蓋 80% 日常工作需求
+    </div>
+  </div>
+
+  <div class="legend">
+    <span style="font-size:.8rem;color:var(--text3);margin-right:.2rem">分類：</span>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--cat-chat)"></div>對話 AI</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--cat-search)"></div>AI 搜尋</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--cat-image)"></div>圖像生成</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--cat-code)"></div>程式輔助</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--cat-agent)"></div>AI Agent</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--cat-doc)"></div>文件整理</div>
+  </div>
+
+  <div class="filter-bar">
+    <span class="filter-label">篩選：</span>
+    <button class="filter-btn active" onclick="filterCards('all',this)">全部工具</button>
+    <button class="filter-btn" onclick="filterCards('chat',this)">💬 對話 AI</button>
+    <button class="filter-btn" onclick="filterCards('search',this)">🔍 AI 搜尋</button>
+    <button class="filter-btn" onclick="filterCards('image',this)">🎨 圖像生成</button>
+    <button class="filter-btn" onclick="filterCards('code',this)">👾 程式輔助</button>
+    <button class="filter-btn" onclick="filterCards('agent',this)">⚙️ AI Agent</button>
+    <button class="filter-btn" onclick="filterCards('doc',this)">📄 文件整理</button>
+  </div>
+
+  <div class="tool-grid" id="toolGrid">
+
+    <div class="tool-card" data-cat="chat">
+      <div class="card-head">
+        <div class="tool-icon">🤖</div>
+        <div class="tool-head-text">
+          <div class="tool-name">ChatGPT</div>
+          <div class="tool-maker">OpenAI</div>
+        </div>
+        <div class="card-badges">
+          <span class="badge badge-freemium">免費／付費</span>
+          <span class="cat-badge">對話 AI</span>
+        </div>
+      </div>
+      <div class="tool-desc">最廣為人知的對話 AI，能寫作、翻譯、分析、回答問題。免費版已非常實用，是入門 AI 最好的第一步，全球用戶數最多。</div>
+      <div class="use-cases">
+        <span class="use-tag">報告撰寫</span><span class="use-tag">翻譯潤稿</span><span class="use-tag">資料整理</span><span class="use-tag">腦力激盪</span><span class="use-tag">學習輔助</span>
+      </div>
+      <div class="metrics">
+        <div class="metric"><div class="metric-label">推薦程度</div><div class="rec-score">9.5<span>/10</span></div></div>
+        <div class="metric"><div class="metric-label">上手難易</div><div class="diff-bar"><div class="diff-dot on"></div><div class="diff-dot on"></div><div class="diff-dot off"></div><div class="diff-dot off"></div><div class="diff-dot off"></div></div></div>
+        <div class="metric"><div class="metric-label">評價</div><div class="stars"><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span></div></div>
+      </div>
+    </div>
+
+    <div class="tool-card" data-cat="chat">
+      <div class="card-head">
+        <div class="tool-icon">✦</div>
+        <div class="tool-head-text">
+          <div class="tool-name">Claude</div>
+          <div class="tool-maker">Anthropic</div>
+        </div>
+        <div class="card-badges">
+          <span class="badge badge-freemium">免費／付費</span>
+          <span class="cat-badge">對話 AI</span>
+        </div>
+      </div>
+      <div class="tool-desc">擅長長文分析、邏輯推理與細膩表達，回答品質穩定。處理複雜文件、撰寫需要思辨的內容時特別突出，適合研究與寫作情境。</div>
+      <div class="use-cases">
+        <span class="use-tag">長文分析</span><span class="use-tag">研究整理</span><span class="use-tag">文案撰寫</span><span class="use-tag">邏輯推理</span><span class="use-tag">程式輔助</span>
+      </div>
+      <div class="metrics">
+        <div class="metric"><div class="metric-label">推薦程度</div><div class="rec-score">9.5<span>/10</span></div></div>
+        <div class="metric"><div class="metric-label">上手難易</div><div class="diff-bar"><div class="diff-dot on"></div><div class="diff-dot on"></div><div class="diff-dot off"></div><div class="diff-dot off"></div><div class="diff-dot off"></div></div></div>
+        <div class="metric"><div class="metric-label">評價</div><div class="stars"><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span></div></div>
+      </div>
+    </div>
+
+    <div class="tool-card" data-cat="chat">
+      <div class="card-head">
+        <div class="tool-icon">💎</div>
+        <div class="tool-head-text">
+          <div class="tool-name">Gemini</div>
+          <div class="tool-maker">Google</div>
+        </div>
+        <div class="card-badges">
+          <span class="badge badge-freemium">免費／付費</span>
+          <span class="cat-badge">對話 AI</span>
+        </div>
+      </div>
+      <div class="tool-desc">整合 Google 搜尋、雲端硬碟、Gmail，在 Google 生態系工作的人特別順手。能處理超長文件，與 Workspace 深度整合是最大優勢。</div>
+      <div class="use-cases">
+        <span class="use-tag">Google 整合</span><span class="use-tag">文件摘要</span><span class="use-tag">郵件撰寫</span><span class="use-tag">試算表分析</span>
+      </div>
+      <div class="metrics">
+        <div class="metric"><div class="metric-label">推薦程度</div><div class="rec-score">8.5<span>/10</span></div></div>
+        <div class="metric"><div class="metric-label">上手難易</div><div class="diff-bar"><div class="diff-dot on"></div><div class="diff-dot on"></div><div class="diff-dot off"></div><div class="diff-dot off"></div><div class="diff-dot off"></div></div></div>
+        <div class="metric"><div class="metric-label">評價</div><div class="stars"><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span><span class="star off">★</span></div></div>
+      </div>
+    </div>
+
+    <div class="tool-card" data-cat="search">
+      <div class="card-head">
+        <div class="tool-icon">🔍</div>
+        <div class="tool-head-text">
+          <div class="tool-name">Perplexity AI</div>
+          <div class="tool-maker">Perplexity AI</div>
+        </div>
+        <div class="card-badges">
+          <span class="badge badge-freemium">免費／付費</span>
+          <span class="cat-badge">AI 搜尋</span>
+        </div>
+      </div>
+      <div class="tool-desc">AI 搜尋引擎，每個答案都附上來源連結，有效降低幻覺風險。用來快速查找資料、了解時事、確認事實，比傳統搜尋更有效率。</div>
+      <div class="use-cases">
+        <span class="use-tag">即時資料查詢</span><span class="use-tag">新聞摘要</span><span class="use-tag">來源查核</span><span class="use-tag">競品研究</span>
+      </div>
+      <div class="metrics">
+        <div class="metric"><div class="metric-label">推薦程度</div><div class="rec-score">9.0<span>/10</span></div></div>
+        <div class="metric"><div class="metric-label">上手難易</div><div class="diff-bar"><div class="diff-dot on"></div><div class="diff-dot off"></div><div class="diff-dot off"></div><div class="diff-dot off"></div><div class="diff-dot off"></div></div></div>
+        <div class="metric"><div class="metric-label">評價</div><div class="stars"><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span></div></div>
+      </div>
+    </div>
+
+    <div class="tool-card" data-cat="doc">
+      <div class="card-head">
+        <div class="tool-icon">📓</div>
+        <div class="tool-head-text">
+          <div class="tool-name">NotebookLM</div>
+          <div class="tool-maker">Google</div>
+        </div>
+        <div class="card-badges">
+          <span class="badge badge-free">完全免費</span>
+          <span class="cat-badge">文件整理</span>
+        </div>
+      </div>
+      <div class="tool-desc">上傳多份 PDF 後，AI 能跨文件回答問題並標注來源。念書、消化大量報告的神器，還能自動生成 Podcast 摘要音檔，完全免費。</div>
+      <div class="use-cases">
+        <span class="use-tag">文獻整理</span><span class="use-tag">跨文件問答</span><span class="use-tag">讀書筆記</span><span class="use-tag">報告摘要</span>
+      </div>
+      <div class="metrics">
+        <div class="metric"><div class="metric-label">推薦程度</div><div class="rec-score">9.0<span>/10</span></div></div>
+        <div class="metric"><div class="metric-label">上手難易</div><div class="diff-bar"><div class="diff-dot on"></div><div class="diff-dot off"></div><div class="diff-dot off"></div><div class="diff-dot off"></div><div class="diff-dot off"></div></div></div>
+        <div class="metric"><div class="metric-label">評價</div><div class="stars"><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span></div></div>
+      </div>
+    </div>
+
+    <div class="tool-card" data-cat="doc">
+      <div class="card-head">
+        <div class="tool-icon">📊</div>
+        <div class="tool-head-text">
+          <div class="tool-name">Gamma</div>
+          <div class="tool-maker">Gamma App</div>
+        </div>
+        <div class="card-badges">
+          <span class="badge badge-freemium">免費／付費</span>
+          <span class="cat-badge">文件整理</span>
+        </div>
+      </div>
+      <div class="tool-desc">輸入主題或貼上文字，AI 自動生成精美簡報、文件或網頁。不需要設計技能，從打草稿到完成簡報只需幾分鐘，職場新人必學工具。</div>
+      <div class="use-cases">
+        <span class="use-tag">AI 簡報生成</span><span class="use-tag">提案文件</span><span class="use-tag">讀書報告</span><span class="use-tag">視覺化呈現</span>
+      </div>
+      <div class="metrics">
+        <div class="metric"><div class="metric-label">推薦程度</div><div class="rec-score">9.0<span>/10</span></div></div>
+        <div class="metric"><div class="metric-label">上手難易</div><div class="diff-bar"><div class="diff-dot on"></div><div class="diff-dot off"></div><div class="diff-dot off"></div><div class="diff-dot off"></div><div class="diff-dot off"></div></div></div>
+        <div class="metric"><div class="metric-label">評價</div><div class="stars"><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span></div></div>
+      </div>
+    </div>
+
+    <div class="tool-card" data-cat="image">
+      <div class="card-head">
+        <div class="tool-icon">🖼️</div>
+        <div class="tool-head-text">
+          <div class="tool-name">ChatGPT 圖像生成</div>
+          <div class="tool-maker">OpenAI (GPT-4o)</div>
+        </div>
+        <div class="card-badges">
+          <span class="badge badge-freemium">免費／付費</span>
+          <span class="cat-badge">圖像生成</span>
+        </div>
+      </div>
+      <div class="tool-desc">直接在 ChatGPT 對話中生成圖像，可以邊聊天邊調整，不需要學特殊指令。對初學者最友善，適合快速出圖用於簡報或社群。</div>
+      <div class="use-cases">
+        <span class="use-tag">快速出圖</span><span class="use-tag">簡報插圖</span><span class="use-tag">概念圖</span><span class="use-tag">對話式修圖</span>
+      </div>
+      <div class="metrics">
+        <div class="metric"><div class="metric-label">推薦程度</div><div class="rec-score">8.5<span>/10</span></div></div>
+        <div class="metric"><div class="metric-label">上手難易</div><div class="diff-bar"><div class="diff-dot on"></div><div class="diff-dot off"></div><div class="diff-dot off"></div><div class="diff-dot off"></div><div class="diff-dot off"></div></div></div>
+        <div class="metric"><div class="metric-label">評價</div><div class="stars"><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span><span class="star off">★</span></div></div>
+      </div>
+    </div>
+
+    <div class="tool-card" data-cat="image">
+      <div class="card-head">
+        <div class="tool-icon">🎨</div>
+        <div class="tool-head-text">
+          <div class="tool-name">Midjourney</div>
+          <div class="tool-maker">Midjourney Inc.</div>
+        </div>
+        <div class="card-badges">
+          <span class="badge badge-paid">付費</span>
+          <span class="cat-badge">圖像生成</span>
+        </div>
+      </div>
+      <div class="tool-desc">目前畫質最精緻的 AI 圖像生成工具，適合製作簡報配圖、視覺提案、創意素材。需付費訂閱，輸出品質在業界首屈一指。</div>
+      <div class="use-cases">
+        <span class="use-tag">簡報配圖</span><span class="use-tag">視覺設計</span><span class="use-tag">創意發想</span><span class="use-tag">社群素材</span>
+      </div>
+      <div class="metrics">
+        <div class="metric"><div class="metric-label">推薦程度</div><div class="rec-score">8.0<span>/10</span></div></div>
+        <div class="metric"><div class="metric-label">上手難易</div><div class="diff-bar"><div class="diff-dot on"></div><div class="diff-dot on"></div><div class="diff-dot on"></div><div class="diff-dot off"></div><div class="diff-dot off"></div></div></div>
+        <div class="metric"><div class="metric-label">評價</div><div class="stars"><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span><span class="star off">★</span></div></div>
+      </div>
+    </div>
+
+    <div class="tool-card" data-cat="code">
+      <div class="card-head">
+        <div class="tool-icon">⚡</div>
+        <div class="tool-head-text">
+          <div class="tool-name">Cursor</div>
+          <div class="tool-maker">Anysphere</div>
+        </div>
+        <div class="card-badges">
+          <span class="badge badge-freemium">免費／付費</span>
+          <span class="cat-badge">程式輔助</span>
+        </div>
+      </div>
+      <div class="tool-desc">AI 原生程式碼編輯器，可以用自然語言描述需求直接生成或修改整個檔案。對非工程師想寫簡單程式的人也很友善，2025 年爆紅。</div>
+      <div class="use-cases">
+        <span class="use-tag">AI 寫程式</span><span class="use-tag">自動重構</span><span class="use-tag">自然語言轉程式</span><span class="use-tag">全專案修改</span>
+      </div>
+      <div class="metrics">
+        <div class="metric"><div class="metric-label">推薦程度</div><div class="rec-score">9.0<span>/10</span></div></div>
+        <div class="metric"><div class="metric-label">上手難易</div><div class="diff-bar"><div class="diff-dot on"></div><div class="diff-dot on"></div><div class="diff-dot off"></div><div class="diff-dot off"></div><div class="diff-dot off"></div></div></div>
+        <div class="metric"><div class="metric-label">評價</div><div class="stars"><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span></div></div>
+      </div>
+    </div>
+
+    <div class="tool-card" data-cat="code">
+      <div class="card-head">
+        <div class="tool-icon">👾</div>
+        <div class="tool-head-text">
+          <div class="tool-name">GitHub Copilot</div>
+          <div class="tool-maker">GitHub / Microsoft</div>
+        </div>
+        <div class="card-badges">
+          <span class="badge badge-paid">付費</span>
+          <span class="cat-badge">程式輔助</span>
+        </div>
+      </div>
+      <div class="tool-desc">直接整合在 VS Code 等編輯器中，邊寫程式邊自動補全建議。有程式基礎的人生產力倍增器，學生可申請免費方案。</div>
+      <div class="use-cases">
+        <span class="use-tag">程式碼補全</span><span class="use-tag">Bug 修復</span><span class="use-tag">程式說明</span><span class="use-tag">單元測試</span>
+      </div>
+      <div class="metrics">
+        <div class="metric"><div class="metric-label">推薦程度</div><div class="rec-score">8.5<span>/10</span></div></div>
+        <div class="metric"><div class="metric-label">上手難易</div><div class="diff-bar"><div class="diff-dot on"></div><div class="diff-dot on"></div><div class="diff-dot on"></div><div class="diff-dot off"></div><div class="diff-dot off"></div></div></div>
+        <div class="metric"><div class="metric-label">評價</div><div class="stars"><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span><span class="star off">★</span></div></div>
+      </div>
+    </div>
+
+    <div class="tool-card" data-cat="agent">
+      <div class="card-head">
+        <div class="tool-icon">🔗</div>
+        <div class="tool-head-text">
+          <div class="tool-name">n8n</div>
+          <div class="tool-maker">n8n GmbH</div>
+        </div>
+        <div class="card-badges">
+          <span class="badge badge-freemium">免費／付費</span>
+          <span class="cat-badge">AI Agent</span>
+        </div>
+      </div>
+      <div class="tool-desc">開源工作流自動化工具，可以把 AI 和各種 App（Gmail、Notion、Slack）串在一起自動執行任務。有視覺化介面，不需要寫程式。</div>
+      <div class="use-cases">
+        <span class="use-tag">工作流自動化</span><span class="use-tag">App 串接</span><span class="use-tag">定時任務</span><span class="use-tag">資料同步</span>
+      </div>
+      <div class="metrics">
+        <div class="metric"><div class="metric-label">推薦程度</div><div class="rec-score">8.0<span>/10</span></div></div>
+        <div class="metric"><div class="metric-label">上手難易</div><div class="diff-bar"><div class="diff-dot on"></div><div class="diff-dot on"></div><div class="diff-dot on"></div><div class="diff-dot on"></div><div class="diff-dot off"></div></div></div>
+        <div class="metric"><div class="metric-label">評價</div><div class="stars"><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span><span class="star off">★</span></div></div>
+      </div>
+    </div>
+
+    <div class="tool-card" data-cat="agent">
+      <div class="card-head">
+        <div class="tool-icon">⚙️</div>
+        <div class="tool-head-text">
+          <div class="tool-name">Make</div>
+          <div class="tool-maker">Make (Integromat)</div>
+        </div>
+        <div class="card-badges">
+          <span class="badge badge-freemium">免費／付費</span>
+          <span class="cat-badge">AI Agent</span>
+        </div>
+      </div>
+      <div class="tool-desc">視覺化自動化平台，比 n8n 更容易上手，支援 1000+ 種應用程式串接。免費版就能處理基本自動化工作流，適合職場新人入門。</div>
+      <div class="use-cases">
+        <span class="use-tag">流程自動化</span><span class="use-tag">表單處理</span><span class="use-tag">通知推送</span><span class="use-tag">資料轉換</span>
+      </div>
+      <div class="metrics">
+        <div class="metric"><div class="metric-label">推薦程度</div><div class="rec-score">8.5<span>/10</span></div></div>
+        <div class="metric"><div class="metric-label">上手難易</div><div class="diff-bar"><div class="diff-dot on"></div><div class="diff-dot on"></div><div class="diff-dot on"></div><div class="diff-dot off"></div><div class="diff-dot off"></div></div></div>
+        <div class="metric"><div class="metric-label">評價</div><div class="stars"><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span><span class="star off">★</span></div></div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="beginner-path">
+    <h3>🎯 新手建議學習路徑</h3>
+    <div class="path-steps">
+      <div class="path-step"><div class="path-step-num">1</div>ChatGPT 或 Claude</div>
+      <span class="path-arrow">→</span>
+      <div class="path-step"><div class="path-step-num">2</div>Perplexity AI</div>
+      <span class="path-arrow">→</span>
+      <div class="path-step"><div class="path-step-num">3</div>NotebookLM</div>
+      <span class="path-arrow">→</span>
+      <div class="path-step"><div class="path-step-num">4</div>Gamma</div>
+    </div>
+    <div class="path-note">以上四個工具皆有完整免費版，可涵蓋日常工作 80% 的 AI 輔助需求。熟悉後再視工作需求延伸學習圖像生成、程式輔助或自動化工具。</div>
+  </div>
+
+</div>
+
+<script>
+function filterCards(cat, btn) {
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.tool-card').forEach(card => {
+    card.classList.toggle('hidden', cat !== 'all' && card.dataset.cat !== cat);
+  });
+}
+</script>
+</body>
+</html>

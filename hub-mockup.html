@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 學習資源 Hub — 視覺 Mockup</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  :root {
+    --brand: #1e3a8a;
+    --brand-deep: #172554;
+    --brand-light: #3b82f6;
+  }
+  body {
+    font-family: 'Noto Sans TC', sans-serif;
+    background: #f8fafc;
+    min-height: 100vh;
+  }
+
+  /* 主背景：明亮淡藍漸層 + 柔光暈 */
+  .hero-bg {
+    background:
+      radial-gradient(ellipse 70% 55% at 15% 20%, rgba(147,197,253,0.55), transparent 60%),
+      radial-gradient(ellipse 55% 45% at 85% 25%, rgba(165,180,252,0.50), transparent 60%),
+      radial-gradient(ellipse 65% 50% at 50% 100%, rgba(196,181,253,0.45), transparent 60%),
+      radial-gradient(ellipse 50% 40% at 80% 80%, rgba(125,211,252,0.40), transparent 60%),
+      linear-gradient(135deg, #eff6ff 0%, #e0e7ff 50%, #f5f3ff 100%);
+  }
+
+  /* 玻璃感卡片（白色玻璃，適用淺色背景） */
+  .glass-card {
+    background: rgba(255, 255, 255, 0.72);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.85);
+    box-shadow:
+      0 8px 32px rgba(30, 58, 138, 0.08),
+      inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  }
+
+  /* 底部資訊列：淺色玻璃 */
+  .glass-card-light {
+    background: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.85);
+    box-shadow:
+      0 8px 24px rgba(30, 58, 138, 0.06),
+      inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  }
+
+  /* 大主題卡片 hover */
+  .topic-card {
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative;
+    overflow: hidden;
+  }
+  .topic-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at var(--mx, 50%) var(--my, 50%),
+                rgba(59,130,246,0.18), transparent 50%);
+    opacity: 0;
+    transition: opacity 0.4s;
+    pointer-events: none;
+  }
+  .topic-card:hover {
+    transform: translateY(-6px) scale(1.01);
+    box-shadow:
+      0 20px 50px rgba(30, 58, 138, 0.15),
+      inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  }
+  .topic-card:hover::before { opacity: 1; }
+
+  /* 統一品牌色：深藍漸層 icon */
+  .icon-wrap {
+    background: linear-gradient(135deg, #2563eb 0%, #1e3a8a 100%);
+    box-shadow:
+      0 10px 25px -8px rgba(30, 58, 138, 0.5),
+      inset 0 1px 0 rgba(255,255,255,0.25);
+  }
+
+  /* illustration SVG container（統一藍色調） */
+  .illustration {
+    position: absolute;
+    right: -20px;
+    bottom: -20px;
+    width: 160px;
+    height: 160px;
+    opacity: 0.13;
+    pointer-events: none;
+    color: #1e3a8a;
+  }
+
+  /* 漸層文字（深色版，適用淺底） */
+  .gradient-text {
+    background: linear-gradient(135deg, #1e40af 0%, #6366f1 50%, #8b5cf6 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* 標籤 chip（淺底版） */
+  .chip {
+    background: rgba(255,255,255,0.85);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,0.95);
+    box-shadow: 0 2px 8px rgba(30, 58, 138, 0.06);
+  }
+
+  /* 入門路徑膠囊（淺底版） */
+  .path-pill {
+    background: rgba(255,255,255,0.5);
+    border: 1px solid rgba(255,255,255,0.9);
+    backdrop-filter: blur(12px);
+    box-shadow: 0 4px 12px rgba(30, 58, 138, 0.08);
+  }
+
+  /* 統一深藍 tag */
+  .brand-tag {
+    background: rgba(219, 234, 254, 0.85);
+    color: #1e40af;
+    border: 1px solid rgba(147, 197, 253, 0.5);
+  }
+
+  /* 動畫 */
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-12px); }
+  }
+  .float-anim { animation: float 6s ease-in-out infinite; }
+
+  @keyframes pulse-glow {
+    0%, 100% { opacity: 0.5; transform: scale(1); }
+    50% { opacity: 0.9; transform: scale(1.2); }
+  }
+  .pulse-anim { animation: pulse-glow 4s ease-in-out infinite; }
+</style>
+</head>
+<body>
+
+<!-- ============ Mockup 標籤列 ============ -->
+<div style="background:#fef3c7;border-bottom:1px solid #fcd34d;padding:8px 24px;font-size:13px;color:#92400e;text-align:center;">
+  📐 視覺 Mockup 預覽 — 這是 Hub 首頁的設計樣稿，正式版會用 React 實作並嵌入 /full-time
+</div>
+
+<!-- ============ 模擬主站 nav ============ -->
+<nav class="bg-white border-b border-slate-200 px-8 py-5 flex justify-between items-center shadow-sm">
+  <div class="flex items-center gap-3">
+    <button class="text-2xl text-slate-400 hover:text-slate-700 transition-all -ml-2 px-2">←</button>
+    <div class="w-10 h-10 bg-blue-900 rounded-xl flex items-center justify-center text-white font-black text-lg">M</div>
+    <h1 class="text-lg font-black text-blue-900 tracking-tight">AI 工具與教學介面</h1>
+  </div>
+  <button class="px-5 py-2 text-sm font-bold text-slate-500 hover:text-red-500 transition-all">
+    使用者名 登出
+  </button>
+</nav>
+
+<!-- ============ 模擬主分頁列（3 個一級項） ============ -->
+<div class="bg-slate-100 border-b border-slate-200 px-6 py-4">
+  <div class="max-w-6xl mx-auto grid grid-cols-3 gap-3">
+    <button class="flex flex-col items-center gap-1.5 py-4 px-3 rounded-2xl font-bold text-sm bg-blue-900 text-white border-2 border-blue-900 shadow-lg scale-[1.03]">
+      <span class="text-3xl">📚</span>
+      <span class="text-base">AI 學習</span>
+    </button>
+    <button class="flex flex-col items-center gap-1.5 py-4 px-3 rounded-2xl font-bold text-sm bg-white text-slate-600 border-2 border-slate-200">
+      <span class="text-3xl">🌟</span>
+      <span class="text-base">成果動態牆</span>
+    </button>
+    <button class="flex flex-col items-center gap-1.5 py-4 px-3 rounded-2xl font-bold text-sm bg-white text-slate-600 border-2 border-slate-200">
+      <span class="text-3xl">📝</span>
+      <span class="text-base">會議紀錄生成</span>
+    </button>
+  </div>
+</div>
+
+<!-- ============ Hub 主內容 ============ -->
+<main class="hero-bg relative overflow-hidden" style="min-height: calc(100vh - 161px);">
+
+  <!-- 背景裝飾：浮動光點（淺底版用稍深一點的顏色才看得到） -->
+  <div class="absolute top-20 left-[10%] w-2 h-2 bg-blue-400 rounded-full pulse-anim"></div>
+  <div class="absolute top-40 right-[20%] w-1.5 h-1.5 bg-indigo-400 rounded-full pulse-anim" style="animation-delay:1s"></div>
+  <div class="absolute bottom-32 left-[25%] w-2 h-2 bg-purple-400 rounded-full pulse-anim" style="animation-delay:2s"></div>
+  <div class="absolute top-1/2 right-[8%] w-3 h-3 bg-sky-400 rounded-full pulse-anim" style="animation-delay:0.5s"></div>
+
+  <!-- 背景浮動 illustration -->
+  <svg class="absolute top-16 right-12 w-32 h-32 float-anim opacity-25" viewBox="0 0 200 200" fill="none" style="color:#3b82f6">
+    <circle cx="100" cy="100" r="60" stroke="currentColor" stroke-width="2" stroke-dasharray="4 6"/>
+    <circle cx="100" cy="100" r="90" stroke="currentColor" stroke-width="1" stroke-dasharray="2 8"/>
+    <circle cx="100" cy="40" r="6" fill="currentColor"/>
+    <circle cx="160" cy="100" r="6" fill="currentColor"/>
+    <circle cx="100" cy="160" r="6" fill="currentColor"/>
+    <circle cx="40" cy="100" r="6" fill="currentColor"/>
+  </svg>
+
+  <div class="max-w-6xl mx-auto px-6 py-16 relative z-10">
+
+    <!-- Hero 區塊 -->
+    <div class="text-center mb-14">
+      <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full chip mb-6">
+        <span class="w-2 h-2 bg-emerald-500 rounded-full"></span>
+        <span class="text-sm font-medium text-slate-700">2025 年版 · 持續更新</span>
+      </div>
+
+      <h1 class="text-5xl md:text-6xl font-black tracking-tight mb-5 text-slate-900 leading-tight">
+        探索 <span class="gradient-text">AI 學習資源</span><br/>
+        提升你的研究效率
+      </h1>
+
+      <p class="text-lg text-slate-600 max-w-2xl mx-auto leading-relaxed mb-8">
+        精選工具對照、實用 Prompt、自動化教學與倫理規範，<br/>
+        一站式整合所有 AI 相關學習資源
+      </p>
+
+      <!-- 入門路徑 -->
+      <div class="inline-flex flex-wrap items-center gap-2 path-pill rounded-2xl px-5 py-3">
+        <span class="text-xs font-bold text-blue-700 mr-2">🎯 新手建議路徑</span>
+        <span class="text-sm text-slate-900 font-bold">ChatGPT</span>
+        <span class="text-blue-400">→</span>
+        <span class="text-sm text-slate-900 font-bold">Perplexity</span>
+        <span class="text-blue-400">→</span>
+        <span class="text-sm text-slate-900 font-bold">NotebookLM</span>
+        <span class="text-blue-400">→</span>
+        <span class="text-sm text-slate-900 font-bold">Gamma</span>
+      </div>
+    </div>
+
+    <!-- 4 張主題卡片（統一深藍 icon） -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
+
+      <!-- 卡片 1：AI 工具對照 -->
+      <a href="#" class="topic-card glass-card rounded-3xl p-8 cursor-pointer block"
+         onmousemove="this.style.setProperty('--mx', event.offsetX+'px');this.style.setProperty('--my', event.offsetY+'px')">
+        <div class="flex items-center justify-between mb-4 relative z-10 gap-3">
+          <div class="flex items-center gap-4 flex-1 min-w-0">
+            <div class="icon-wrap w-14 h-14 rounded-2xl flex items-center justify-center text-white text-2xl shrink-0">
+              🗂️
+            </div>
+            <h3 class="text-2xl font-black text-slate-900 truncate">AI 工具對照</h3>
+          </div>
+          <span class="chip px-3 py-1 rounded-full text-xs font-bold text-slate-700 shrink-0">12 款工具</span>
+        </div>
+        <p class="text-sm text-slate-600 leading-relaxed mb-6 relative z-10">
+          精選 12 款實用工具，依使用情境分類比較，含推薦程度、上手難易與使用場景
+        </p>
+        <div class="flex flex-wrap gap-1.5 mb-6 relative z-10">
+          <span class="text-[11px] brand-tag px-2.5 py-1 rounded-md font-medium">對話 AI</span>
+          <span class="text-[11px] brand-tag px-2.5 py-1 rounded-md font-medium">AI 搜尋</span>
+          <span class="text-[11px] brand-tag px-2.5 py-1 rounded-md font-medium">圖像生成</span>
+          <span class="text-[11px] brand-tag px-2.5 py-1 rounded-md font-medium">+3</span>
+        </div>
+        <div class="flex items-center justify-between relative z-10">
+          <div class="flex items-center gap-2 text-sm font-bold text-blue-700">
+            <span>探索工具</span>
+            <span>→</span>
+          </div>
+        </div>
+        <svg class="illustration" viewBox="0 0 200 200" fill="none">
+          <rect x="30" y="40" width="50" height="50" rx="8" fill="currentColor"/>
+          <rect x="90" y="40" width="50" height="50" rx="8" fill="currentColor"/>
+          <rect x="150" y="40" width="40" height="50" rx="8" fill="currentColor"/>
+          <rect x="30" y="100" width="50" height="50" rx="8" fill="currentColor"/>
+          <rect x="90" y="100" width="50" height="50" rx="8" fill="currentColor"/>
+          <rect x="150" y="100" width="40" height="50" rx="8" fill="currentColor"/>
+        </svg>
+      </a>
+
+      <!-- 卡片 2：AI 倫理 -->
+      <a href="#" class="topic-card glass-card rounded-3xl p-8 cursor-pointer block"
+         onmousemove="this.style.setProperty('--mx', event.offsetX+'px');this.style.setProperty('--my', event.offsetY+'px')">
+        <div class="flex items-center justify-between mb-4 relative z-10 gap-3">
+          <div class="flex items-center gap-4 flex-1 min-w-0">
+            <div class="icon-wrap w-14 h-14 rounded-2xl flex items-center justify-center text-white text-2xl shrink-0">
+              ⚖️
+            </div>
+            <h3 class="text-2xl font-black text-slate-900 truncate">AI 倫理與負責任使用</h3>
+          </div>
+          <span class="chip px-3 py-1 rounded-full text-xs font-bold text-slate-700 shrink-0">5 大原則</span>
+        </div>
+        <p class="text-sm text-slate-600 leading-relaxed mb-6 relative z-10">
+          研究工作的 AI 使用規範：資料紅線、事實查核、引用著作權、揭露標準
+        </p>
+        <div class="flex flex-wrap gap-1.5 mb-6 relative z-10">
+          <span class="text-[11px] brand-tag px-2.5 py-1 rounded-md font-medium">資料隱私</span>
+          <span class="text-[11px] brand-tag px-2.5 py-1 rounded-md font-medium">幻覺查核</span>
+          <span class="text-[11px] brand-tag px-2.5 py-1 rounded-md font-medium">學術誠信</span>
+        </div>
+        <div class="flex items-center justify-between relative z-10">
+          <div class="flex items-center gap-2 text-sm font-bold text-blue-700">
+            <span>閱讀規範</span>
+            <span>→</span>
+          </div>
+        </div>
+        <svg class="illustration" viewBox="0 0 200 200" fill="none">
+          <path d="M100 30 L100 170 M50 80 L150 80 M40 80 L60 130 L80 80 M120 80 L140 130 L160 80" stroke="currentColor" stroke-width="8" stroke-linecap="round"/>
+          <circle cx="100" cy="30" r="10" fill="currentColor"/>
+        </svg>
+      </a>
+
+      <!-- 卡片 3：n8n 工作流 -->
+      <a href="#" class="topic-card glass-card rounded-3xl p-8 cursor-pointer block"
+         onmousemove="this.style.setProperty('--mx', event.offsetX+'px');this.style.setProperty('--my', event.offsetY+'px')">
+        <div class="flex items-center justify-between mb-4 relative z-10 gap-3">
+          <div class="flex items-center gap-4 flex-1 min-w-0">
+            <div class="icon-wrap w-14 h-14 rounded-2xl flex items-center justify-center text-white text-2xl shrink-0">
+              🔧
+            </div>
+            <h3 class="text-2xl font-black text-slate-900 truncate">n8n 工作流自動化</h3>
+          </div>
+          <span class="chip px-3 py-1 rounded-full text-xs font-bold text-slate-700 shrink-0">完整教學</span>
+        </div>
+        <p class="text-sm text-slate-600 leading-relaxed mb-6 relative z-10">
+          視覺化串接 AI 與各種 App，從入門到實作完整教學，把重複任務交給機器人
+        </p>
+        <div class="flex flex-wrap gap-1.5 mb-6 relative z-10">
+          <span class="text-[11px] brand-tag px-2.5 py-1 rounded-md font-medium">工作流</span>
+          <span class="text-[11px] brand-tag px-2.5 py-1 rounded-md font-medium">App 串接</span>
+          <span class="text-[11px] brand-tag px-2.5 py-1 rounded-md font-medium">自動化</span>
+        </div>
+        <div class="flex items-center justify-between relative z-10">
+          <div class="flex items-center gap-2 text-sm font-bold text-blue-700">
+            <span>開始學習</span>
+            <span>→</span>
+          </div>
+        </div>
+        <svg class="illustration" viewBox="0 0 200 200" fill="none">
+          <circle cx="50" cy="60" r="20" fill="currentColor"/>
+          <circle cx="150" cy="60" r="20" fill="currentColor"/>
+          <circle cx="100" cy="140" r="20" fill="currentColor"/>
+          <line x1="50" y1="60" x2="100" y2="140" stroke="currentColor" stroke-width="3"/>
+          <line x1="150" y1="60" x2="100" y2="140" stroke="currentColor" stroke-width="3"/>
+          <line x1="50" y1="60" x2="150" y2="60" stroke="currentColor" stroke-width="3"/>
+        </svg>
+      </a>
+
+      <!-- 卡片 4：Prompt 資料庫 -->
+      <a href="#" class="topic-card glass-card rounded-3xl p-8 cursor-pointer block"
+         onmousemove="this.style.setProperty('--mx', event.offsetX+'px');this.style.setProperty('--my', event.offsetY+'px')">
+        <div class="flex items-center justify-between mb-4 relative z-10 gap-3">
+          <div class="flex items-center gap-4 flex-1 min-w-0">
+            <div class="icon-wrap w-14 h-14 rounded-2xl flex items-center justify-center text-white text-2xl shrink-0">
+              💡
+            </div>
+            <h3 class="text-2xl font-black text-slate-900 truncate">Prompt 資料庫</h3>
+          </div>
+          <span class="chip px-3 py-1 rounded-full text-xs font-bold text-slate-700 shrink-0">5+ 範本</span>
+        </div>
+        <p class="text-sm text-slate-600 leading-relaxed mb-6 relative z-10">
+          收錄會議紀錄、教學設計、公文撰寫等常用 Prompt 範本，點擊即可複製
+        </p>
+        <div class="flex flex-wrap gap-1.5 mb-6 relative z-10">
+          <span class="text-[11px] brand-tag px-2.5 py-1 rounded-md font-medium">會議紀錄</span>
+          <span class="text-[11px] brand-tag px-2.5 py-1 rounded-md font-medium">教學設計</span>
+          <span class="text-[11px] brand-tag px-2.5 py-1 rounded-md font-medium">公文撰寫</span>
+        </div>
+        <div class="flex items-center justify-between relative z-10">
+          <div class="flex items-center gap-2 text-sm font-bold text-blue-700">
+            <span>瀏覽範本</span>
+            <span>→</span>
+          </div>
+        </div>
+        <svg class="illustration" viewBox="0 0 200 200" fill="none">
+          <rect x="30" y="40" width="140" height="20" rx="4" fill="currentColor"/>
+          <rect x="30" y="75" width="100" height="20" rx="4" fill="currentColor"/>
+          <rect x="30" y="110" width="140" height="20" rx="4" fill="currentColor"/>
+          <rect x="30" y="145" width="80" height="20" rx="4" fill="currentColor"/>
+        </svg>
+      </a>
+
+    </div>
+
+    <!-- 底部資訊列（淺色玻璃） -->
+    <div class="glass-card-light rounded-2xl p-6 flex items-center justify-between flex-wrap gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-xl">📈</div>
+        <div>
+          <div class="text-slate-900 font-bold text-sm">資源持續成長中</div>
+          <div class="text-slate-600 text-xs mt-0.5">本月新增 3 個 Prompt 範本、更新 AI 倫理章節</div>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="text-xs text-slate-600">有想要納入的資源？</span>
+        <button class="px-4 py-2 bg-blue-900 hover:bg-blue-800 text-white text-sm font-medium rounded-xl transition-all shadow-md shadow-blue-200">
+          建議新內容 →
+        </button>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<!-- ============ 註腳 ============ -->
+<div style="background:#1e293b;padding:24px;text-align:center;color:#94a3b8;font-size:12px;">
+  視覺 Mockup · 國立臺灣大學 高教深耕計畫辦公室
+</div>
+
+</body>
+</html>

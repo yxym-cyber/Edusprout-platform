@@ -57,3 +57,25 @@ match /posts/{postId} {
     allow delete: if isAuthor(resource.data) || isAdmin();
   }
 }
+
+// AI 學習許願池：成員寫下想學什麼 + 互相按愛心響應
+match /learn_wishes/{wishId} {
+  // 任何白名單成員都能讀
+  allow read: if isWhitelisted();
+
+  // 建立許願：必須是登入的白名單成員，且 authorEmail 必須是自己
+  allow create: if isWhitelisted()
+    && request.resource.data.authorEmail == request.auth.token.email
+    && request.resource.data.likes == 0
+    && request.resource.data.likedBy.size() == 0;
+
+  // 更新：只允許「按愛心」相關欄位變動，或作者/admin 改自己的內文
+  allow update: if isWhitelisted() && (
+    (request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly(['likes', 'likedBy']))
+    || (isAuthor(resource.data) || isAdmin())
+  );
+
+  // 刪除：只有作者或 admin
+  allow delete: if isAuthor(resource.data) || isAdmin();
+}

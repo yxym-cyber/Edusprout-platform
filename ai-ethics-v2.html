@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 倫理與負責任使用</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --primary: #2d3a8c;
+  --primary-light: #eef0fb;
+  --primary-mid: #4a5bc4;
+  --bg: #f0f2f8;
+  --bg-card: #ffffff;
+  --text: #1a1f3a;
+  --text2: #5a6080;
+  --text3: #9aa0bc;
+  --border: #e2e5f0;
+  --border2: #c8ccdf;
+  --shadow: 0 2px 12px rgba(45,58,140,0.08);
+  --shadow-hover: 0 6px 24px rgba(45,58,140,0.15);
+  --radius: 14px;
+  --radius-sm: 8px;
+  --red: #dc2626;
+  --red-bg: #fef2f2;
+  --red-border: #fecaca;
+  --amber: #d97706;
+  --amber-bg: #fffbeb;
+  --amber-border: #fde68a;
+  --blue: #1d4ed8;
+  --blue-bg: #eff6ff;
+  --blue-border: #bfdbfe;
+  --green: #059669;
+  --green-bg: #ecfdf5;
+  --green-border: #a7f3d0;
+  --purple: #7c3aed;
+  --purple-bg: #f5f3ff;
+  --purple-border: #ddd6fe;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  font-family: 'Noto Sans TC', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+.page-wrap {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 2rem 2rem 4rem;
+}
+
+/* Page header */
+.page-header { margin-bottom: 2rem; }
+
+.page-title {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: .4rem;
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+}
+
+.page-subtitle {
+  font-size: .9rem;
+  color: var(--text2);
+  line-height: 1.7;
+}
+
+/* Intro banner */
+.intro-banner {
+  background: var(--primary);
+  border-radius: var(--radius);
+  padding: 1.5rem 2rem;
+  margin-bottom: 2rem;
+  color: white;
+}
+
+.intro-banner h2 {
+  font-size: 1rem;
+  font-weight: 700;
+  margin-bottom: .5rem;
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+}
+
+.intro-banner p {
+  font-size: .88rem;
+  opacity: .85;
+  line-height: 1.75;
+}
+
+/* Quick nav */
+.quick-nav {
+  display: flex;
+  gap: .5rem;
+  flex-wrap: wrap;
+  margin-bottom: 2rem;
+}
+
+.nav-chip {
+  font-size: .8rem;
+  padding: 6px 14px;
+  border-radius: 100px;
+  border: 1.5px solid var(--border2);
+  background: var(--bg-card);
+  color: var(--text2);
+  cursor: pointer;
+  text-decoration: none;
+  transition: all .18s;
+  display: flex;
+  align-items: center;
+  gap: .3rem;
+}
+
+.nav-chip:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--primary-light);
+}
+
+/* Section card */
+.section-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 1.2rem;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.section-head {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.3rem 1.6rem;
+  cursor: pointer;
+  user-select: none;
+  transition: background .15s;
+}
+
+.section-head:hover { background: var(--bg); }
+
+.section-num {
+  width: 28px; height: 28px;
+  border-radius: 8px;
+  background: var(--primary-light);
+  color: var(--primary);
+  font-size: .78rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.section-head-text { flex: 1; }
+
+.section-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.section-desc {
+  font-size: .8rem;
+  color: var(--text3);
+  margin-top: 1px;
+}
+
+.section-chevron {
+  color: var(--text3);
+  font-size: 1rem;
+  transition: transform .2s;
+}
+
+.section-card.open .section-chevron { transform: rotate(180deg); }
+
+.section-body {
+  display: none;
+  padding: 0 1.6rem 1.4rem;
+  border-top: 1px solid var(--border);
+}
+
+.section-card.open .section-body { display: block; }
+
+/* Rule grid */
+.rule-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .8rem;
+  margin-top: 1.2rem;
+}
+
+@media (max-width: 600px) {
+  .rule-grid { grid-template-columns: 1fr; }
+}
+
+.rule-card {
+  border-radius: var(--radius-sm);
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--border);
+}
+
+.rule-card.danger  { background: var(--red-bg);    border-color: var(--red-border); }
+.rule-card.warning { background: var(--amber-bg);  border-color: var(--amber-border); }
+.rule-card.info    { background: var(--blue-bg);   border-color: var(--blue-border); }
+.rule-card.success { background: var(--green-bg);  border-color: var(--green-border); }
+.rule-card.neutral { background: var(--bg);        border-color: var(--border2); }
+
+.rule-card-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  margin-bottom: .4rem;
+}
+
+.danger  .rule-card-label { color: var(--red); }
+.warning .rule-card-label { color: var(--amber); }
+.info    .rule-card-label { color: var(--blue); }
+.success .rule-card-label { color: var(--green); }
+.neutral .rule-card-label { color: var(--text2); }
+
+.rule-card h4 {
+  font-size: .9rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: .3rem;
+}
+
+.rule-card p {
+  font-size: .83rem;
+  color: var(--text2);
+  line-height: 1.7;
+}
+
+/* GEM notice */
+.gem-notice {
+  background: var(--amber-bg);
+  border: 1px solid var(--amber-border);
+  border-left: 3px solid var(--amber);
+  border-radius: var(--radius-sm);
+  padding: 1.1rem 1.3rem;
+  margin-top: 1.2rem;
+}
+
+.gem-notice-head {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  margin-bottom: .6rem;
+}
+
+.gem-badge {
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--amber);
+  color: white;
+  padding: 2px 8px;
+  border-radius: 4px;
+  letter-spacing: .04em;
+}
+
+.gem-notice-title {
+  font-size: .88rem;
+  font-weight: 700;
+  color: var(--amber);
+}
+
+.gem-notice p {
+  font-size: .85rem;
+  color: var(--text2);
+  line-height: 1.75;
+}
+
+.gem-notice strong { color: var(--text); }
+
+/* Checklist */
+.checklist {
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+  margin-top: 1rem;
+}
+
+.checklist-item {
+  display: flex;
+  gap: .7rem;
+  align-items: flex-start;
+  padding: .7rem .9rem;
+  background: var(--green-bg);
+  border: 1px solid var(--green-border);
+  border-radius: var(--radius-sm);
+}
+
+.check-icon {
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  border: 1.5px solid var(--green);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+  font-size: 10px;
+  color: var(--green);
+  font-weight: 700;
+}
+
+.checklist-item span {
+  font-size: .84rem;
+  color: var(--text2);
+  line-height: 1.65;
+}
+
+/* Disclosure table */
+.disclosure-wrap {
+  margin-top: 1.2rem;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.disclosure-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .84rem;
+}
+
+.disclosure-table th {
+  font-size: .75rem;
+  font-weight: 700;
+  letter-spacing: .06em;
+  color: var(--text3);
+  background: var(--bg);
+  padding: .7rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.disclosure-table td {
+  padding: .8rem 1rem;
+  vertical-align: top;
+  border-bottom: 1px solid var(--border);
+  color: var(--text2);
+  line-height: 1.6;
+}
+
+.disclosure-table tr:last-child td { border-bottom: none; }
+.disclosure-table tr:hover td { background: var(--bg); }
+
+.tag {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: 100px;
+}
+
+.tag-must     { background: #fee2e2; color: #991b1b; }
+.tag-suggest  { background: #fef3c7; color: #92400e; }
+.tag-optional { background: var(--bg); color: var(--text3); border: 1px solid var(--border2); }
+
+/* Summary */
+.summary-card {
+  background: var(--primary-light);
+  border: 1px solid #c7cef5;
+  border-radius: var(--radius);
+  padding: 1.4rem 1.8rem;
+  margin-top: 1.5rem;
+  display: flex;
+  gap: .8rem;
+  align-items: flex-start;
+}
+
+.summary-icon { font-size: 1.4rem; flex-shrink: 0; }
+
+.summary-card p {
+  font-size: .88rem;
+  color: var(--text2);
+  line-height: 1.8;
+}
+
+.summary-card strong { color: var(--primary); }
+</style>
+</head>
+<body>
+<div class="page-wrap">
+
+  <div class="page-header">
+    <div class="page-title">
+      <span>⚖️</span>
+      AI 倫理與負責任使用
+    </div>
+    <div class="page-subtitle">研究工作涉及資料隱私、事實準確性與學術誠信，使用 AI 工具前請確認你已了解以下原則</div>
+  </div>
+
+  <div class="intro-banner">
+    <h2>📋 為什麼研究人員需要特別注意 AI 倫理？</h2>
+    <p>研究工作的產出往往影響政策決策與公共利益，AI 工具雖能提升效率，但若使用不當，可能造成隱私洩漏、資訊失真或研究偏誤。了解以下規範，讓 AI 成為可靠的研究夥伴。</p>
+  </div>
+
+  <div class="quick-nav">
+    <span style="font-size:.8rem;color:var(--text3);padding:6px 0">快速跳轉：</span>
+    <a class="nav-chip" href="#" onclick="openSection('data');return false;">🚫 資料輸入紅線</a>
+    <a class="nav-chip" href="#" onclick="openSection('hallucination');return false;">🔎 幻覺與查核</a>
+    <a class="nav-chip" href="#" onclick="openSection('citation');return false;">📚 引用著作權</a>
+    <a class="nav-chip" href="#" onclick="openSection('disclosure');return false;">📢 使用揭露</a>
+    <a class="nav-chip" href="#" onclick="openSection('bias');return false;">⚠️ 研究偏誤</a>
+  </div>
+
+  <!-- 01 資料輸入紅線 -->
+  <div class="section-card open" id="sec-data">
+    <div class="section-head" onclick="toggleSection('data')">
+      <div class="section-num">01</div>
+      <div class="section-head-text">
+        <div class="section-title">資料輸入紅線</div>
+        <div class="section-desc">哪些資料絕對不能輸入 AI 工具</div>
+      </div>
+      <div class="section-chevron">▼</div>
+    </div>
+    <div class="section-body">
+      <div class="rule-grid">
+        <div class="rule-card danger">
+          <div class="rule-card-label">🚫 禁止輸入</div>
+          <h4>個人資料</h4>
+          <p>姓名、聯絡方式、可辨識身份的逐字稿內容，須先去識別化再輸入 AI 工具。</p>
+        </div>
+        <div class="rule-card danger">
+          <div class="rule-card-label">🚫 禁止輸入</div>
+          <h4>未發表研究數據</h4>
+          <p>調查原始數據、未公開統計結果，在正式發表前不應輸入任何外部 AI 平台。</p>
+        </div>
+        <div class="rule-card danger">
+          <div class="rule-card-label">🚫 禁止輸入</div>
+          <h4>機密文件</h4>
+          <p>計畫書、成果報告書、一校一本（校庫、學基庫）等機密性文件，一律不得輸入。</p>
+        </div>
+        <div class="rule-card warning">
+          <div class="rule-card-label">⚠️ 輸入前確認</div>
+          <h4>第三方授權資料</h4>
+          <p>使用有著作權的資料庫、付費報告內容時，請先確認使用條款是否允許 AI 處理。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 02 幻覺與查核 -->
+  <div class="section-card open" id="sec-hallucination">
+    <div class="section-head" onclick="toggleSection('hallucination')">
+      <div class="section-num">02</div>
+      <div class="section-head-text">
+        <div class="section-title">幻覺與事實查核</div>
+        <div class="section-desc">AI 輸出不等於事實，如何正確驗證</div>
+      </div>
+      <div class="section-chevron">▼</div>
+    </div>
+    <div class="section-body">
+      <p style="font-size:.88rem;color:var(--text2);line-height:1.8;margin-top:1rem">AI 語言模型有時會生成聽起來合理但實際上不正確的內容，稱為「幻覺（Hallucination）」。這在研究工作中風險尤高，因為錯誤資訊可能直接影響政策建議或研究結論。</p>
+
+      <div class="gem-notice">
+        <div class="gem-notice-head">
+          <span class="gem-badge">GEM 平台提醒</span>
+          <span class="gem-notice-title">精準訪視協作搜尋平台 ／ PROMPT BOOK</span>
+        </div>
+        <p>使用本機構自建的<strong>精準訪視協作搜尋平台</strong>及 <strong>PROMPT BOOK</strong> 時，雖已透過 Prompt 設計降低幻覺發生機率，但由於內容仍由 AI 生成，<strong>所有輸出結果仍須由使用者自行檢核事實正確性</strong>，不得直接作為研究引用依據。</p>
+      </div>
+
+      <div class="checklist">
+        <div class="checklist-item"><div class="check-icon">✓</div><span>數據與統計數字須回溯至原始資料來源確認</span></div>
+        <div class="checklist-item"><div class="check-icon">✓</div><span>人名、機構名、法規名稱等專有名詞須逐一核實</span></div>
+        <div class="checklist-item"><div class="check-icon">✓</div><span>AI 提供的文獻引用須至原文確認是否真實存在</span></div>
+        <div class="checklist-item"><div class="check-icon">✓</div><span>時間敏感資訊（現行法規、最新政策）須確認 AI 知識截止日期</span></div>
+        <div class="checklist-item"><div class="check-icon">✓</div><span>若有疑慮，優先以官方資料、學術資料庫為準</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 03 引用與著作權 -->
+  <div class="section-card" id="sec-citation">
+    <div class="section-head" onclick="toggleSection('citation')">
+      <div class="section-num">03</div>
+      <div class="section-head-text">
+        <div class="section-title">引用與著作權</div>
+        <div class="section-desc">AI 產出的引用效力與著作權問題</div>
+      </div>
+      <div class="section-chevron">▼</div>
+    </div>
+    <div class="section-body">
+      <div class="rule-grid">
+        <div class="rule-card info">
+          <div class="rule-card-label">📌 注意事項</div>
+          <h4>AI 產出不具引用效力</h4>
+          <p>AI 生成的文字不能直接作為學術引用來源，須追溯至原始文獻後引用原始資料。</p>
+        </div>
+        <div class="rule-card info">
+          <div class="rule-card-label">📌 注意事項</div>
+          <h4>著作權歸屬尚不明確</h4>
+          <p>AI 生成內容的著作權在各國法律尚未完全確立，對外發表時建議標注 AI 工具的使用情形。</p>
+        </div>
+        <div class="rule-card success">
+          <div class="rule-card-label">✅ 建議做法</div>
+          <h4>保留 AI 輔助紀錄</h4>
+          <p>建議保存使用的 Prompt 與輸出內容，以便日後審查或說明研究過程。</p>
+        </div>
+        <div class="rule-card success">
+          <div class="rule-card-label">✅ 建議做法</div>
+          <h4>改寫而非直接使用</h4>
+          <p>AI 產出應視為初稿或參考，以研究者自身語言重新整理後再使用。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 04 使用揭露 -->
+  <div class="section-card" id="sec-disclosure">
+    <div class="section-head" onclick="toggleSection('disclosure')">
+      <div class="section-num">04</div>
+      <div class="section-head-text">
+        <div class="section-title">AI 使用揭露標準</div>
+        <div class="section-desc">不同情境下是否需要揭露 AI 使用</div>
+      </div>
+      <div class="section-chevron">▼</div>
+    </div>
+    <div class="section-body">
+      <div class="disclosure-wrap">
+        <table class="disclosure-table">
+          <thead>
+            <tr>
+              <th>使用情境</th>
+              <th>揭露建議</th>
+              <th>層級</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>對外正式研究報告</strong></td>
+              <td>於方法論章節說明 AI 工具使用範圍與目的</td>
+              <td><span class="tag tag-must">建議揭露</span></td>
+            </tr>
+            <tr>
+              <td><strong>政策建議簡報</strong></td>
+              <td>於文末或附錄注記「部分內容經 AI 輔助整理」</td>
+              <td><span class="tag tag-must">建議揭露</span></td>
+            </tr>
+            <tr>
+              <td><strong>內部工作報告</strong></td>
+              <td>依各單位規範，建議主動告知主管</td>
+              <td><span class="tag tag-suggest">視情況揭露</span></td>
+            </tr>
+            <tr>
+              <td><strong>個人工作整理、草稿</strong></td>
+              <td>無強制要求，但保留 AI 輔助紀錄為佳</td>
+              <td><span class="tag tag-optional">自行判斷</span></td>
+            </tr>
+            <tr>
+              <td><strong>對外媒體發稿</strong></td>
+              <td>依各媒體 AI 使用政策，部分媒體有強制揭露要求</td>
+              <td><span class="tag tag-must">建議揭露</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 05 研究偏誤 -->
+  <div class="section-card" id="sec-bias">
+    <div class="section-head" onclick="toggleSection('bias')">
+      <div class="section-num">05</div>
+      <div class="section-head-text">
+        <div class="section-title">研究偏誤風險</div>
+        <div class="section-desc">AI 可能帶入的偏誤與因應方式</div>
+      </div>
+      <div class="section-chevron">▼</div>
+    </div>
+    <div class="section-body">
+      <div class="rule-grid">
+        <div class="rule-card warning">
+          <div class="rule-card-label">⚠️ 風險類型</div>
+          <h4>訓練資料偏誤</h4>
+          <p>AI 模型訓練資料以英文、西方觀點為主，處理本地政策或台灣特有議題時，分析可能有所偏差。</p>
+        </div>
+        <div class="rule-card warning">
+          <div class="rule-card-label">⚠️ 風險類型</div>
+          <h4>文獻摘要選擇偏誤</h4>
+          <p>AI 摘要大量文獻時，可能放大某些觀點、忽略少數但重要的異議，建議人工抽查原文。</p>
+        </div>
+        <div class="rule-card warning">
+          <div class="rule-card-label">⚠️ 風險類型</div>
+          <h4>確認偏誤強化</h4>
+          <p>Prompt 措辭本身會引導 AI 產出符合預設立場的結果，建議以不同角度提問相互驗證。</p>
+        </div>
+        <div class="rule-card success">
+          <div class="rule-card-label">✅ 因應做法</div>
+          <h4>多角度交叉驗證</h4>
+          <p>同一個研究問題，嘗試從不同立場提問，比較 AI 回應是否一致，作為偏誤檢核。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Summary -->
+  <div class="summary-card">
+    <div class="summary-icon">💡</div>
+    <p>AI 是研究工作的輔助工具，<strong>不取代研究者的專業判斷</strong>。任何 AI 輸出在正式使用前，都需要經過<strong>事實查核、來源確認與人工審閱</strong>。使用 AI 提升效率的同時，研究者仍是最終成果的負責人。</p>
+  </div>
+
+</div>
+
+<script>
+function toggleSection(id) {
+  const card = document.getElementById('sec-' + id);
+  card.classList.toggle('open');
+}
+
+function openSection(id) {
+  const card = document.getElementById('sec-' + id);
+  card.classList.add('open');
+  card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+</script>
+</body>
+</html>

@@ -7,13 +7,18 @@ import { db } from "@/lib/firebase";
 import { collection, addDoc, doc, getDoc, serverTimestamp, query, orderBy, where, getDocs } from "firebase/firestore";
 import { generateMeetingSummary, LM_STUDIO_MODEL } from "@/lib/lmStudio";
 import ShowcaseFeed from "./ShowcaseFeed";
+import LearnHub, { LearnTopic } from "./LearnHub";
+import LearnTools from "./LearnTools";
+import LearnEthics from "./LearnEthics";
+import LearnPrompts from "./LearnPrompts";
 
-type Tab = "n8n" | "ai-tools" | "prompts" | "showcase" | "meeting";
+type Tab = "learn" | "showcase" | "meeting";
 
 export default function FullTimePage() {
     const { user, userData, loading, logout } = useAuth();
     const router = useRouter();
-    const [activeTab, setActiveTab] = useState<Tab>("n8n");
+    const [activeTab, setActiveTab] = useState<Tab>("learn");
+    const [learnTopic, setLearnTopic] = useState<LearnTopic | null>(null);
 
     // Meeting generation state
     const [title, setTitle] = useState("");
@@ -195,363 +200,547 @@ export default function FullTimePage() {
     if (!user || (userData?.role !== "admin" && userData?.role !== "full-time")) return null;
 
     const tabs: { id: Tab; label: string; emoji: string }[] = [
-        { id: "n8n", label: "n8n 教學", emoji: "🔧" },
-        { id: "ai-tools", label: "AI 工具教學", emoji: "🤖" },
-        { id: "prompts", label: "Prompt 資料庫", emoji: "💡" },
+        { id: "learn", label: "AI 學習", emoji: "📚" },
         { id: "showcase", label: "成果動態牆", emoji: "🌟" },
         { id: "meeting", label: "會議紀錄生成", emoji: "📝" },
     ];
 
+    // 每個 tab 對應的主色（accent 色），用來決定 active tab 漸層、indicator 等
+    const tabAccents: Record<Tab, { gradient: string; ring: string; glow: string }> = {
+        learn:    { gradient: "linear-gradient(135deg, #2563eb 0%, #6366f1 50%, #8b5cf6 100%)", ring: "rgba(99,102,241,0.55)", glow: "rgba(99,102,241,0.35)" },
+        showcase: { gradient: "linear-gradient(135deg, #ec4899 0%, #d946ef 50%, #a855f7 100%)", ring: "rgba(217,70,239,0.55)", glow: "rgba(217,70,239,0.35)" },
+        meeting:  { gradient: "linear-gradient(135deg, #0891b2 0%, #0284c7 50%, #1e40af 100%)", ring: "rgba(8,145,178,0.55)", glow: "rgba(8,145,178,0.35)" },
+    };
+
     return (
         <>
-        <div className="min-h-screen bg-slate-50 flex flex-col text-slate-900 font-sans">
+        <div className="min-h-screen flex flex-col text-slate-900 font-sans" style={{
+            background: "linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%)",
+        }}>
             {/* Navbar */}
-            <nav className="bg-white border-b border-slate-200 px-8 py-4 flex justify-between items-center shadow-sm sticky top-0 z-10">
+            <nav className="sticky top-0 z-20 px-6 md:px-8 py-3.5 flex justify-between items-center"
+                 style={{
+                     background: "rgba(255,255,255,0.78)",
+                     backdropFilter: "blur(20px) saturate(180%)",
+                     WebkitBackdropFilter: "blur(20px) saturate(180%)",
+                     borderBottom: "1px solid rgba(226,232,240,0.85)",
+                     boxShadow: "0 1px 0 rgba(255,255,255,0.9) inset, 0 4px 18px -8px rgba(15,23,42,0.08)",
+                 }}>
                 <div className="flex items-center gap-3">
                     <button
                         onClick={() => router.push("/admin")}
-                        className="text-slate-400 hover:text-blue-900 font-bold text-lg transition-colors mr-1"
+                        className="w-9 h-9 rounded-xl flex items-center justify-center text-slate-500 hover:text-slate-800 transition-all"
+                        style={{ background: "rgba(241,245,249,0.6)", border: "1px solid rgba(226,232,240,0.85)" }}
                         title="返回管理門戶"
                     >
-                        ←
+                        <span className="text-base font-bold">←</span>
                     </button>
-                    <div className="w-9 h-9 bg-blue-900 rounded-xl flex items-center justify-center text-white font-black text-lg">M</div>
-                    <h1 className="text-lg font-black text-blue-900 tracking-tight">AI 工具與教學介面</h1>
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-black text-lg shrink-0"
+                         style={{
+                             background: "linear-gradient(135deg, #1e3a8a 0%, #6366f1 60%, #ec4899 100%)",
+                             boxShadow: "0 10px 24px -8px rgba(99,102,241,0.5), inset 0 1px 0 rgba(255,255,255,0.25)",
+                         }}>
+                        M
+                    </div>
+                    <div className="leading-tight">
+                        <h1 className="text-sm md:text-base font-black text-slate-900 tracking-tight">高教深耕管理平台</h1>
+                        <p className="hidden md:block text-[11px] text-slate-500 font-medium">AI 工具 · 學習 · 成果分享 · 會議自動化</p>
+                    </div>
                 </div>
                 <button
                     onClick={logout}
-                    className="px-5 py-2 text-sm font-bold text-slate-500 hover:text-red-500 transition-all"
+                    className="px-4 py-2 text-xs md:text-sm font-bold rounded-xl text-slate-600 hover:text-rose-500 transition-all flex items-center gap-2"
+                    style={{ background: "rgba(255,255,255,0.6)", border: "1px solid rgba(226,232,240,0.85)" }}
                 >
-                    {user.displayName} 登出
+                    <span className="hidden md:inline">{user.displayName}</span>
+                    <span>登出 →</span>
                 </button>
             </nav>
 
-            {/* Tab bar */}
-            <div className="bg-slate-100 border-b border-slate-200 px-6 py-4">
-                <div className="max-w-6xl mx-auto grid grid-cols-5 gap-3">
-                    {tabs.map((tab) => (
-                        <button
-                            key={tab.id}
-                            onClick={() => setActiveTab(tab.id)}
-                            className={`flex flex-col items-center gap-1.5 py-4 px-3 rounded-2xl font-bold text-sm transition-all duration-200 shadow-sm border-2 ${
-                                activeTab === tab.id
-                                    ? "bg-blue-900 text-white border-blue-900 shadow-lg scale-[1.03]"
-                                    : "bg-white text-slate-600 border-slate-200 hover:border-blue-300 hover:text-blue-900 hover:shadow-md"
-                            }`}
-                        >
-                            <span className="text-3xl">{tab.emoji}</span>
-                            <span className="text-base">{tab.label}</span>
-                        </button>
-                    ))}
+            {/* Tab bar：玻璃膠囊式切換器 */}
+            <div className="relative px-6 py-5" style={{
+                background: `
+                    radial-gradient(ellipse 60% 80% at 18% 0%, rgba(165,180,252,0.35), transparent 65%),
+                    radial-gradient(ellipse 50% 80% at 50% 0%, rgba(244,114,182,0.28), transparent 65%),
+                    radial-gradient(ellipse 60% 80% at 85% 0%, rgba(125,211,252,0.30), transparent 65%),
+                    linear-gradient(180deg, rgba(248,250,252,0.6) 0%, rgba(248,250,252,0) 100%)
+                `,
+            }}>
+                <div className="max-w-4xl mx-auto rounded-3xl p-2 flex gap-2"
+                     style={{
+                         background: "rgba(255,255,255,0.72)",
+                         backdropFilter: "blur(20px) saturate(180%)",
+                         WebkitBackdropFilter: "blur(20px) saturate(180%)",
+                         border: "1px solid rgba(255,255,255,0.95)",
+                         boxShadow: "0 12px 36px -12px rgba(30,41,59,0.18), inset 0 1px 0 rgba(255,255,255,0.95)",
+                     }}>
+                    {tabs.map((tab) => {
+                        const active = activeTab === tab.id;
+                        const accent = tabAccents[tab.id];
+                        return (
+                            <button
+                                key={tab.id}
+                                onClick={() => setActiveTab(tab.id)}
+                                className="flex-1 relative rounded-2xl px-3 py-3 md:py-3.5 font-bold text-sm transition-all duration-300 flex items-center justify-center gap-2.5 group"
+                                style={{
+                                    background: active ? accent.gradient : "transparent",
+                                    color: active ? "#ffffff" : "#475569",
+                                    boxShadow: active
+                                        ? `0 12px 26px -8px ${accent.glow}, inset 0 1px 0 rgba(255,255,255,0.3)`
+                                        : "none",
+                                    border: active ? "1px solid rgba(255,255,255,0.35)" : "1px solid transparent",
+                                }}
+                            >
+                                <span className={`text-xl md:text-2xl transition-transform duration-300 ${active ? "scale-110" : "group-hover:scale-105"}`}>{tab.emoji}</span>
+                                <span className="hidden sm:inline">{tab.label}</span>
+                                <span className="sm:hidden text-xs">{tab.label.slice(0, 2)}</span>
+                                {active && (
+                                    <span className="absolute inset-x-6 -bottom-px h-px rounded-full" style={{
+                                        background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.7), transparent)",
+                                    }} />
+                                )}
+                            </button>
+                        );
+                    })}
                 </div>
             </div>
 
             {/* Tab content */}
             <div className="flex-1 flex flex-col">
-                {activeTab === "n8n" && (
-                    <iframe
-                        src="/n8n_guide_modified_5.html"
-                        className="w-full border-0"
-                        style={{ height: "calc(100vh - 161px)" }}
-                        title="n8n 工作流教學"
-                    />
-                )}
-                {activeTab === "ai-tools" && (
-                    <iframe
-                        src="/n8n_guide_modified_5.html?tab=ai"
-                        className="w-full border-0"
-                        style={{ height: "calc(100vh - 161px)" }}
-                        title="AI 工具教學"
-                    />
-                )}
-                {activeTab === "prompts" && (
-                    <div className="max-w-6xl mx-auto w-full py-12 px-6">
-                        <div className="bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden">
-                            <header className="bg-blue-900 px-8 py-6 text-white">
-                                <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-                                    <span>💡</span> Prompt 資料庫
-                                </h1>
-                                <p className="text-blue-100 text-sm mt-1">收錄常用 Prompt 範本，點擊即可複製使用</p>
-                            </header>
-
-                            <div className="p-8 space-y-5">
-                                {[
-                                    {
-                                        category: "會議紀錄",
-                                        title: "逐字稿議題化整理",
-                                        desc: "將會議逐字稿依議題重組，產出結構化紀錄。",
-                                        content: "你是一位專業的會議紀錄撰寫者。請依下列規範整理會議逐字稿：\n1. 將內容依議題分類，合併分散在不同段落的相同議題。\n2. 每個議題需包含：議題標題、背景說明、研議要點、共識決議。\n3. 條列待辦事項並標註負責單位與時限。\n4. 以正式公文語氣撰寫，避免主觀情緒字眼。",
-                                    },
-                                    {
-                                        category: "教學設計",
-                                        title: "課程大綱生成器",
-                                        desc: "依主題快速產出 4 週課程大綱結構。",
-                                        content: "請依以下主題生成 4 週課程大綱：\n主題：{請填入主題}\n對象：{請填入學習對象}\n\n每週需提供：\n- 學習目標（3 點）\n- 核心概念\n- 課堂活動建議\n- 評量方式\n- 延伸閱讀",
-                                    },
-                                    {
-                                        category: "AI 工具應用",
-                                        title: "n8n 工作流規劃",
-                                        desc: "協助你規劃自動化流程節點。",
-                                        content: "我想用 n8n 自動化以下流程：\n{請描述目的與來源/目標系統}\n\n請列出：\n1. 需要哪些節點（trigger / action / 邏輯）\n2. 每個節點的設定要點\n3. 可能遇到的錯誤與處理方式\n4. 一個簡單的測試方法",
-                                    },
-                                    {
-                                        category: "公文撰寫",
-                                        title: "會議通知公文",
-                                        desc: "快速產出符合公文格式的會議通知。",
-                                        content: "請依下列資訊撰寫會議通知公文（受文者：相關單位）：\n會議名稱：\n時間：\n地點：\n召集人：\n議程：\n備註：\n\n格式需符合公文三段式：主旨、說明、辦法。",
-                                    },
-                                    {
-                                        category: "資料摘要",
-                                        title: "長篇文件摘要",
-                                        desc: "將長篇文件壓縮成重點摘要。",
-                                        content: "請將以下內容摘要為：\n1. 一句話總結（30 字內）\n2. 三點核心觀點\n3. 兩個值得進一步追問的問題\n\n內容：\n{請貼上原始內容}",
-                                    },
-                                ].map((p, i) => (
-                                    <div
-                                        key={i}
-                                        className="bg-slate-50 rounded-xl border border-slate-200 hover:border-blue-400 hover:shadow-md transition-all p-5"
-                                    >
-                                        <div className="flex justify-between items-start gap-4 mb-2">
-                                            <div>
-                                                <span className="inline-block text-[11px] font-bold uppercase tracking-wider text-blue-700 bg-blue-100 px-2 py-0.5 rounded mb-1">
-                                                    {p.category}
-                                                </span>
-                                                <h3 className="text-base font-black text-slate-800">{p.title}</h3>
-                                                <p className="text-xs text-slate-500 mt-0.5">{p.desc}</p>
-                                            </div>
-                                            <button
-                                                onClick={() => {
-                                                    navigator.clipboard.writeText(p.content);
-                                                    setMessage({ type: "success", text: `已複製：${p.title}` });
-                                                    setTimeout(() => setMessage({ type: "", text: "" }), 2000);
-                                                }}
-                                                className="shrink-0 text-xs font-bold py-2 px-3 bg-white border border-blue-900 text-blue-900 rounded hover:bg-blue-900 hover:text-white transition-all flex items-center gap-1"
-                                            >
-                                                📋 複製
-                                            </button>
-                                        </div>
-                                        <pre className="mt-3 text-xs text-slate-700 bg-white border border-slate-200 rounded-lg p-3 whitespace-pre-wrap font-mono leading-relaxed">
-{p.content}
-                                        </pre>
+                {activeTab === "learn" && (
+                    <div className="flex-1 flex flex-col" style={{ minHeight: "calc(100vh - 161px)" }}>
+                        {learnTopic === null   && <LearnHub onSelect={setLearnTopic} />}
+                        {learnTopic === "tools"   && <LearnTools onBack={() => setLearnTopic(null)} />}
+                        {learnTopic === "ethics"  && <LearnEthics onBack={() => setLearnTopic(null)} />}
+                        {learnTopic === "prompts" && <LearnPrompts onBack={() => setLearnTopic(null)} />}
+                        {learnTopic === "n8n" && (
+                            <div className="flex-1 flex flex-col bg-white">
+                                <div className="sticky top-0 z-20 bg-white/85 backdrop-blur-md border-b border-slate-200 px-6 py-3">
+                                    <div className="max-w-6xl mx-auto flex items-center justify-between">
+                                        <button
+                                            onClick={() => setLearnTopic(null)}
+                                            className="flex items-center gap-2 text-sm font-bold text-slate-600 hover:text-blue-900 transition-all"
+                                        >
+                                            <span className="text-lg">←</span>
+                                            <span>返回 AI 學習 Hub</span>
+                                        </button>
+                                        <div className="text-xs text-slate-500">AI 學習 / <span className="font-bold text-slate-700">n8n 工作流自動化</span></div>
                                     </div>
-                                ))}
-
-                                {message.text && (
-                                    <div className={`fixed bottom-6 right-6 p-4 rounded-md text-sm font-medium shadow-lg ${message.type === "success" ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-700 border border-red-200"}`}>
-                                        {message.text}
-                                    </div>
-                                )}
+                                </div>
+                                <iframe
+                                    src="/n8n_guide_modified_5.html"
+                                    className="w-full border-0 flex-1"
+                                    style={{ minHeight: "calc(100vh - 220px)" }}
+                                    title="n8n 工作流教學"
+                                />
                             </div>
-                        </div>
+                        )}
                     </div>
                 )}
                 {activeTab === "showcase" && <ShowcaseFeed />}
                 {activeTab === "meeting" && (
-                    <div className="max-w-2xl mx-auto w-full py-12 px-6">
-                        <div className="bg-white rounded-lg border border-slate-200 shadow-xl overflow-hidden">
-                            <header className="bg-blue-900 px-8 py-6 text-white text-center">
-                                <h1 className="text-2xl font-bold tracking-tight">會議紀錄生成</h1>
-                                <p className="text-blue-100 text-sm mt-1">建立與管理會議記錄</p>
+                    <div className="relative overflow-hidden min-h-full" style={{
+                        background: `
+                            radial-gradient(ellipse 70% 55% at 12% 18%, rgba(165,243,252,0.55), transparent 60%),
+                            radial-gradient(ellipse 55% 45% at 88% 22%, rgba(186,230,253,0.55), transparent 60%),
+                            radial-gradient(ellipse 65% 50% at 50% 100%, rgba(191,219,254,0.50), transparent 60%),
+                            radial-gradient(ellipse 50% 40% at 82% 78%, rgba(125,211,252,0.40), transparent 60%),
+                            linear-gradient(135deg, #ecfeff 0%, #eff6ff 50%, #f0f9ff 100%)
+                        `,
+                    }}>
+                        {/* 浮動裝飾 */}
+                        <MeetingDecor />
+
+                        <div className="max-w-3xl mx-auto w-full py-12 md:py-16 px-4 md:px-6 relative z-10">
+                            {/* Hero 區 */}
+                            <header className="text-center mb-10">
+                                <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full mb-6"
+                                     style={{background: "rgba(255,255,255,0.85)", border: "1px solid rgba(255,255,255,0.95)", boxShadow: "0 2px 8px rgba(8,47,73,0.06)"}}>
+                                    <span className="w-2 h-2 bg-cyan-500 rounded-full" style={{animation: "meetingPulse 2.4s ease-in-out infinite"}} />
+                                    <span className="text-xs font-bold text-slate-700">LM Studio · Gemma 27B 本機推論</span>
+                                </div>
+                                <h1 className="text-3xl md:text-5xl font-black tracking-tight mb-4 text-slate-900 leading-tight">
+                                    <span style={{
+                                        background: "linear-gradient(135deg, #0e7490 0%, #0284c7 45%, #1e40af 100%)",
+                                        WebkitBackgroundClip: "text",
+                                        backgroundClip: "text",
+                                        color: "transparent",
+                                    }}>會議紀錄</span>
+                                    <span className="text-slate-900">自動生成</span>
+                                </h1>
+                                <p className="text-sm md:text-base text-slate-600 max-w-xl mx-auto leading-relaxed">
+                                    上傳逐字稿，AI 自動整理出議題、決議與待辦事項<br className="hidden md:block"/>
+                                    產出結構化、可直接歸檔的會議紀錄
+                                </p>
                             </header>
 
-                            <form onSubmit={handleSubmit} className="p-8 space-y-6">
-                                <div className="space-y-2">
-                                    <label className="text-sm font-semibold text-slate-600">會議標題</label>
-                                    <input
-                                        type="text"
-                                        value={title}
-                                        onChange={(e) => setTitle(e.target.value)}
-                                        placeholder="例如：2026年第一次學術研討會"
-                                        className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-900 focus:bg-white transition-all"
-                                    />
-                                </div>
-
-                                <div className="space-y-2">
-                                    <label className="text-sm font-semibold text-slate-600">會議日期</label>
-                                    <input
-                                        type="date"
-                                        value={date}
-                                        onChange={(e) => setDate(e.target.value)}
-                                        className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-900 focus:bg-white transition-all"
-                                    />
-                                </div>
-
-                                <div className="space-y-2">
-                                    <label className="text-sm font-semibold text-slate-600">逐字稿檔案 (.txt)</label>
-                                    <div className="relative group">
-                                        <input
-                                            type="file"
-                                            accept=".txt"
-                                            onChange={handleFileChange}
-                                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                                        />
-                                        <div className="w-full px-4 py-6 bg-slate-50 border-2 border-dashed border-slate-200 rounded-lg group-hover:border-blue-900 transition-all flex flex-col items-center justify-center gap-2">
-                                            <svg className="w-8 h-8 text-slate-400 group-hover:text-blue-900" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                                            </svg>
-                                            <span className="text-sm text-slate-500 font-medium">
-                                                {fileName || "點擊或拖曳檔案至此處上傳"}
+                            {/* 步驟膠囊 */}
+                            <div className="flex justify-center mb-8">
+                                <div className="inline-flex flex-wrap items-center gap-2 rounded-2xl px-5 py-3"
+                                     style={{background: "rgba(255,255,255,0.6)", border: "1px solid rgba(255,255,255,0.95)", backdropFilter: "blur(12px)", boxShadow: "0 4px 12px rgba(8,47,73,0.08)"}}>
+                                    <span className="text-xs font-bold text-cyan-700 mr-2">🔄 三步驟</span>
+                                    {[
+                                        { i: "1", t: "上傳 .txt" },
+                                        { i: "2", t: "AI 整理" },
+                                        { i: "3", t: "歸檔分享" },
+                                    ].map((s, i, arr) => (
+                                        <span key={s.i} className="flex items-center gap-2">
+                                            <span className="inline-flex items-center gap-1.5">
+                                                <span className="w-5 h-5 rounded-full text-[10px] font-black text-white flex items-center justify-center"
+                                                      style={{background: "linear-gradient(135deg, #06b6d4, #0284c7)"}}>{s.i}</span>
+                                                <span className="text-sm text-slate-900 font-bold">{s.t}</span>
                                             </span>
+                                            {i < arr.length - 1 && <span className="text-cyan-400">→</span>}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* 上傳卡 + 列表卡 整合於玻璃容器 */}
+                            <div className="rounded-3xl overflow-hidden"
+                                 style={{
+                                     background: "rgba(255,255,255,0.72)",
+                                     backdropFilter: "blur(20px) saturate(180%)",
+                                     WebkitBackdropFilter: "blur(20px) saturate(180%)",
+                                     border: "1px solid rgba(255,255,255,0.95)",
+                                     boxShadow: "0 24px 48px -16px rgba(8,47,73,0.14), inset 0 1px 0 rgba(255,255,255,0.95)",
+                                 }}>
+                                {/* === 上傳表單 === */}
+                                <div className="p-7 md:p-9 border-b border-cyan-100/60">
+                                    <div className="flex items-center gap-3 mb-6">
+                                        <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-lg shrink-0"
+                                             style={{
+                                                 background: "linear-gradient(135deg, #06b6d4 0%, #0369a1 100%)",
+                                                 boxShadow: "0 10px 22px -8px rgba(2,132,199,0.55), inset 0 1px 0 rgba(255,255,255,0.3)",
+                                             }}>📥</div>
+                                        <div>
+                                            <h2 className="text-base md:text-lg font-black text-slate-900">建立新會議</h2>
+                                            <p className="text-[12px] text-slate-500">填寫資訊 + 上傳逐字稿</p>
                                         </div>
                                     </div>
-                                    {fileName && (
-                                        <p className="text-xs text-slate-400 mt-1 italic">
-                                            * 系統將自動讀取內容並轉存為文字
-                                        </p>
-                                    )}
+
+                                    <form onSubmit={handleSubmit} className="space-y-5">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div className="space-y-1.5">
+                                                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">會議標題</label>
+                                                <input
+                                                    type="text"
+                                                    value={title}
+                                                    onChange={(e) => setTitle(e.target.value)}
+                                                    placeholder="例如：2026年第一次學術研討會"
+                                                    className="w-full px-4 py-2.5 bg-white/80 border border-cyan-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:bg-white transition-all text-sm"
+                                                />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">會議日期</label>
+                                                <input
+                                                    type="date"
+                                                    value={date}
+                                                    onChange={(e) => setDate(e.target.value)}
+                                                    className="w-full px-4 py-2.5 bg-white/80 border border-cyan-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:bg-white transition-all text-sm"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-1.5">
+                                            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">逐字稿檔案 (.txt)</label>
+                                            <div className="relative group">
+                                                <input
+                                                    type="file"
+                                                    accept=".txt"
+                                                    onChange={handleFileChange}
+                                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                                />
+                                                <div className={`w-full px-4 py-8 rounded-xl flex flex-col items-center justify-center gap-2 transition-all border-2 border-dashed ${fileName ? "border-cyan-400 bg-cyan-50/70" : "border-cyan-200/80 bg-white/50 group-hover:border-cyan-400 group-hover:bg-cyan-50/40"}`}>
+                                                    <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white text-xl"
+                                                         style={{
+                                                             background: fileName
+                                                                 ? "linear-gradient(135deg, #06b6d4, #0284c7)"
+                                                                 : "linear-gradient(135deg, #67e8f9, #38bdf8)",
+                                                             boxShadow: "0 10px 22px -8px rgba(8,145,178,0.5)",
+                                                         }}>
+                                                        {fileName ? "✓" : "📄"}
+                                                    </div>
+                                                    <span className={`text-sm font-bold ${fileName ? "text-cyan-700" : "text-slate-600"}`}>
+                                                        {fileName || "點擊或拖曳 .txt 至此"}
+                                                    </span>
+                                                    <span className="text-[11px] text-slate-500">最大 5 MB</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {message.text && (
+                                            <div className={`p-3.5 rounded-xl text-sm font-medium border ${
+                                                message.type === "success" ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                                : message.type === "error" ? "bg-rose-50 text-rose-700 border-rose-200"
+                                                : "bg-sky-50 text-sky-700 border-sky-200"
+                                            }`}>
+                                                {message.text}
+                                            </div>
+                                        )}
+
+                                        <button
+                                            type="submit"
+                                            disabled={isSubmitting}
+                                            className="w-full py-3.5 text-white rounded-xl font-black text-sm tracking-wide transition-all active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                            style={{
+                                                background: isSubmitting
+                                                    ? "linear-gradient(135deg, #94a3b8 0%, #64748b 100%)"
+                                                    : "linear-gradient(135deg, #06b6d4 0%, #0284c7 50%, #1e40af 100%)",
+                                                boxShadow: isSubmitting ? "none" : "0 12px 26px -8px rgba(8,145,178,0.55), inset 0 1px 0 rgba(255,255,255,0.25)",
+                                            }}
+                                        >
+                                            {isSubmitting ? (
+                                                <><span className="animate-spin">↻</span> 正在儲存中...</>
+                                            ) : (
+                                                <>📌 建立會議紀錄</>
+                                            )}
+                                        </button>
+                                    </form>
                                 </div>
 
-                                {message.text && (
-                                    <div className={`p-4 rounded-md text-sm font-medium ${message.type === "success" ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-700 border border-red-200"}`}>
-                                        {message.text}
+                                {/* === 會議列表 === */}
+                                <div className="p-7 md:p-9">
+                                    <div className="flex items-center gap-3 mb-5">
+                                        <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-lg shrink-0"
+                                             style={{
+                                                 background: "linear-gradient(135deg, #0ea5e9 0%, #1e40af 100%)",
+                                                 boxShadow: "0 10px 22px -8px rgba(30,64,175,0.55), inset 0 1px 0 rgba(255,255,255,0.3)",
+                                             }}>📚</div>
+                                        <div className="flex-1">
+                                            <h2 className="text-base md:text-lg font-black text-slate-900">會議檔案庫</h2>
+                                            <p className="text-[12px] text-slate-500">{meetings.length} 場會議 · 點擊「生成 AI 紀錄」即可</p>
+                                        </div>
                                     </div>
-                                )}
 
-                                <button
-                                    type="submit"
-                                    disabled={isSubmitting}
-                                    className="w-full py-3 bg-blue-900 text-white rounded-md font-bold hover:bg-blue-800 disabled:bg-slate-300 disabled:cursor-not-allowed transition-all shadow-md active:transform active:scale-[0.99]"
-                                >
-                                    {isSubmitting ? "正在儲存中..." : "確認建立會議記錄"}
-                                </button>
-                            </form>
-
-                            <div className="border-t border-slate-200 bg-slate-50/50 p-8">
-                                <h2 className="text-lg font-bold text-slate-800 mb-4">現有會議清單</h2>
-                                <div className="space-y-4">
-                                    {meetings.length === 0 ? (
-                                        <p className="text-sm text-slate-400 italic">尚未建立任何會議。</p>
-                                    ) : (
-                                        meetings.map((m) => (
-                                            <div key={m.id} className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-                                                {/* 會議列 */}
-                                                <div className="p-4 flex justify-between items-center">
-                                                    <div>
-                                                        <h3 className="font-bold text-slate-800">{m.title}</h3>
-                                                        <p className="text-xs text-slate-500">{m.date}</p>
-                                                    </div>
-                                                    <div className="flex items-center gap-2">
-                                                        {/* 查看 AI 紀錄按鈕（有紀錄才顯示） */}
-                                                        {summaries[m.id] && (
-                                                            <button
-                                                                onClick={() => fetchSummary(m.id)}
-                                                                disabled={loadingSummary === m.id}
-                                                                className="text-xs font-bold py-2 px-3 bg-green-50 border border-green-600 text-green-700 rounded hover:bg-green-600 hover:text-white transition-all flex items-center gap-1"
-                                                            >
-                                                                <span>{expandedMeeting === m.id ? "▲" : "▼"}</span>
-                                                                查看 AI 紀錄
-                                                            </button>
-                                                        )}
-                                                        {/* 生成 AI 紀錄按鈕 */}
-                                                        <button
-                                                            onClick={() => generateAIReport(m.id, m.sourceId)}
-                                                            disabled={isGenerating === m.id}
-                                                            className="text-xs font-bold py-2 px-3 bg-white border border-blue-900 text-blue-900 rounded hover:bg-blue-900 hover:text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                                                        >
-                                                            {isGenerating === m.id ? (
-                                                                <>
-                                                                    <span className="animate-spin text-sm">↻</span>
-                                                                    生成中...
-                                                                </>
-                                                            ) : (
-                                                                <>
-                                                                    <span>✨</span>
-                                                                    {summaries[m.id] ? "重新生成" : "生成 AI 紀錄"}
-                                                                </>
-                                                            )}
-                                                        </button>
-                                                    </div>
-                                                </div>
-
-                                                {/* 展開的 AI 紀錄內容 */}
-                                                {expandedMeeting === m.id && summaries[m.id] && (
-                                                    <div className="border-t border-slate-100 bg-slate-50 p-5 space-y-5 text-sm">
-                                                        {/* 標題 */}
-                                                        <h4 className="font-black text-blue-900 text-base border-l-4 border-blue-900 pl-3">{summaries[m.id].title}</h4>
-
-                                                        {/* 一、核心討論議題 */}
-                                                        {summaries[m.id].issues?.length > 0 && (
-                                                            <div>
-                                                                <p className="font-bold text-slate-700 mb-3">📋 一、核心討論議題</p>
-                                                                <div className="space-y-4">
-                                                                    {summaries[m.id].issues.map((issue: any, i: number) => (
-                                                                        <div key={i} className="bg-white rounded-lg border border-slate-200 p-4 space-y-2">
-                                                                            <p className="font-bold text-slate-800">議題 {i + 1}：{issue.title}</p>
-                                                                            {issue.background && (
-                                                                                <div>
-                                                                                    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">背景說明</span>
-                                                                                    <p className="text-slate-600 mt-0.5">{issue.background}</p>
-                                                                                </div>
-                                                                            )}
-                                                                            {issue.discussion_points?.length > 0 && (
-                                                                                <div>
-                                                                                    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">研議要點</span>
-                                                                                    <ul className="mt-0.5 space-y-1">
-                                                                                        {issue.discussion_points.map((pt: string, j: number) => (
-                                                                                            <li key={j} className="flex gap-2 text-slate-600">
-                                                                                                <span className="text-blue-400 font-bold shrink-0">▸</span>
-                                                                                                <span>{pt}</span>
-                                                                                            </li>
-                                                                                        ))}
-                                                                                    </ul>
-                                                                                </div>
-                                                                            )}
-                                                                            {issue.conclusion && (
-                                                                                <div className="bg-blue-50 border border-blue-100 rounded px-3 py-2">
-                                                                                    <span className="text-xs font-semibold text-blue-700 uppercase tracking-wide">共識決議</span>
-                                                                                    <p className="text-blue-900 mt-0.5">{issue.conclusion}</p>
-                                                                                </div>
-                                                                            )}
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-                                                            </div>
-                                                        )}
-
-                                                        {/* 二、待辦事項與行動計畫 */}
-                                                        {summaries[m.id].action_items?.length > 0 && (
-                                                            <div>
-                                                                <p className="font-bold text-slate-700 mb-3">✅ 二、待辦事項與行動計畫</p>
-                                                                <div className="overflow-x-auto">
-                                                                    <table className="w-full text-xs border-collapse">
-                                                                        <thead>
-                                                                            <tr className="bg-slate-100 text-slate-600">
-                                                                                <th className="text-left px-3 py-2 border border-slate-200 w-8">#</th>
-                                                                                <th className="text-left px-3 py-2 border border-slate-200">任務描述</th>
-                                                                                <th className="text-left px-3 py-2 border border-slate-200 whitespace-nowrap">負責單位</th>
-                                                                                <th className="text-left px-3 py-2 border border-slate-200 whitespace-nowrap">預計時限</th>
-                                                                            </tr>
-                                                                        </thead>
-                                                                        <tbody>
-                                                                            {summaries[m.id].action_items.map((item: any, i: number) => (
-                                                                                <tr key={i} className="bg-white hover:bg-slate-50">
-                                                                                    <td className="px-3 py-2 border border-slate-200 text-slate-500">{item.id ?? i + 1}</td>
-                                                                                    <td className="px-3 py-2 border border-slate-200 text-slate-700">{item.task}</td>
-                                                                                    <td className="px-3 py-2 border border-slate-200 text-slate-600">{item.owner}</td>
-                                                                                    <td className="px-3 py-2 border border-slate-200 text-slate-600">{item.deadline}</td>
-                                                                                </tr>
-                                                                            ))}
-                                                                        </tbody>
-                                                                    </table>
-                                                                </div>
-                                                            </div>
-                                                        )}
-
-                                                        {/* 三、補充說明 */}
-                                                        {summaries[m.id].notes && (
-                                                            <div>
-                                                                <p className="font-bold text-slate-700 mb-1">📎 三、補充說明</p>
-                                                                <p className="text-slate-600 bg-white border border-slate-200 rounded px-3 py-2">{summaries[m.id].notes}</p>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                )}
+                                    <div className="space-y-3">
+                                        {meetings.length === 0 ? (
+                                            <div className="text-center py-12 rounded-2xl border-2 border-dashed border-cyan-200/70 bg-white/40">
+                                                <p className="text-4xl mb-3">📭</p>
+                                                <p className="text-sm font-bold text-slate-700">尚未建立任何會議</p>
+                                                <p className="text-xs text-slate-500 mt-1">先在上方建立第一場會議</p>
                                             </div>
-                                        ))
-                                    )}
+                                        ) : (
+                                            meetings.map((m) => {
+                                                const hasSummary = !!summaries[m.id];
+                                                const isExpanded = expandedMeeting === m.id;
+                                                return (
+                                                    <div key={m.id}
+                                                         className="rounded-2xl overflow-hidden transition-all"
+                                                         style={{
+                                                             background: hasSummary
+                                                                 ? "linear-gradient(135deg, rgba(236,254,255,0.9), rgba(239,246,255,0.9))"
+                                                                 : "rgba(255,255,255,0.88)",
+                                                             border: hasSummary ? "1px solid rgba(34,211,238,0.35)" : "1px solid rgba(186,230,253,0.5)",
+                                                             boxShadow: isExpanded
+                                                                 ? "0 12px 30px -10px rgba(8,145,178,0.25), inset 0 1px 0 rgba(255,255,255,0.95)"
+                                                                 : "0 4px 12px -6px rgba(8,47,73,0.08), inset 0 1px 0 rgba(255,255,255,0.85)",
+                                                         }}>
+                                                        {/* 會議列 */}
+                                                        <div className="p-4 flex justify-between items-center gap-3 flex-wrap">
+                                                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                                                                <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
+                                                                     style={{
+                                                                         background: hasSummary
+                                                                             ? "linear-gradient(135deg, #06b6d4, #0284c7)"
+                                                                             : "linear-gradient(135deg, #e0f2fe, #bae6fd)",
+                                                                         color: hasSummary ? "#fff" : "#0c4a6e",
+                                                                         boxShadow: hasSummary ? "0 8px 18px -6px rgba(8,145,178,0.45)" : "none",
+                                                                     }}>
+                                                                    {hasSummary ? "✓" : "🗂"}
+                                                                </div>
+                                                                <div className="min-w-0">
+                                                                    <h3 className="font-black text-slate-900 text-sm md:text-base truncate">{m.title}</h3>
+                                                                    <p className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-2">
+                                                                        <span>📅 {m.date}</span>
+                                                                        {hasSummary && (
+                                                                            <span className="px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-bold text-[10px]">已生成</span>
+                                                                        )}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-center gap-2 shrink-0">
+                                                                {hasSummary && (
+                                                                    <button
+                                                                        onClick={() => fetchSummary(m.id)}
+                                                                        disabled={loadingSummary === m.id}
+                                                                        className="text-xs font-bold py-2 px-3 rounded-xl transition-all flex items-center gap-1"
+                                                                        style={{
+                                                                            background: isExpanded
+                                                                                ? "linear-gradient(135deg, #10b981, #0d9488)"
+                                                                                : "rgba(236,253,245,0.9)",
+                                                                            color: isExpanded ? "#fff" : "#047857",
+                                                                            border: isExpanded ? "1px solid rgba(255,255,255,0.3)" : "1px solid rgba(167,243,208,0.85)",
+                                                                            boxShadow: isExpanded ? "0 8px 18px -6px rgba(13,148,136,0.4)" : "none",
+                                                                        }}
+                                                                    >
+                                                                        <span>{isExpanded ? "▲" : "▼"}</span>
+                                                                        {isExpanded ? "收起" : "查看紀錄"}
+                                                                    </button>
+                                                                )}
+                                                                <button
+                                                                    onClick={() => generateAIReport(m.id, m.sourceId)}
+                                                                    disabled={isGenerating === m.id}
+                                                                    className="text-xs font-bold py-2 px-3 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                                                                    style={{
+                                                                        background: hasSummary
+                                                                            ? "rgba(255,255,255,0.9)"
+                                                                            : "linear-gradient(135deg, #06b6d4 0%, #0284c7 100%)",
+                                                                        color: hasSummary ? "#0e7490" : "#fff",
+                                                                        border: hasSummary ? "1px solid rgba(34,211,238,0.45)" : "1px solid rgba(255,255,255,0.3)",
+                                                                        boxShadow: hasSummary ? "none" : "0 8px 18px -6px rgba(8,145,178,0.45)",
+                                                                    }}
+                                                                >
+                                                                    {isGenerating === m.id ? (
+                                                                        <><span className="animate-spin">↻</span>生成中...</>
+                                                                    ) : (
+                                                                        <><span>{hasSummary ? "🔄" : "✨"}</span>{hasSummary ? "重新生成" : "生成 AI 紀錄"}</>
+                                                                    )}
+                                                                </button>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* 展開的 AI 紀錄內容 */}
+                                                        {isExpanded && summaries[m.id] && (
+                                                            <div className="border-t border-cyan-100/60 px-5 py-5 space-y-6 text-sm"
+                                                                 style={{background: "linear-gradient(135deg, rgba(255,255,255,0.85), rgba(240,249,255,0.65))"}}>
+                                                                {/* 紀錄主標題 */}
+                                                                <div className="flex items-center gap-3 pb-3 border-b border-cyan-100/60">
+                                                                    <div className="w-1 h-8 rounded-full" style={{background: "linear-gradient(180deg, #06b6d4, #1e40af)"}} />
+                                                                    <h4 className="font-black text-slate-900 text-base md:text-lg">{summaries[m.id].title}</h4>
+                                                                </div>
+
+                                                                {/* 一、核心討論議題 */}
+                                                                {summaries[m.id].issues?.length > 0 && (
+                                                                    <div>
+                                                                        <SectionHeader emoji="📋" label="一、核心討論議題" tone="cyan" />
+                                                                        <div className="space-y-3 mt-3">
+                                                                            {summaries[m.id].issues.map((issue: any, i: number) => (
+                                                                                <div key={i} className="rounded-2xl p-4 space-y-3"
+                                                                                     style={{
+                                                                                         background: "rgba(255,255,255,0.85)",
+                                                                                         border: "1px solid rgba(186,230,253,0.7)",
+                                                                                         boxShadow: "0 4px 12px -6px rgba(8,47,73,0.08)",
+                                                                                     }}>
+                                                                                    <p className="font-black text-slate-900 flex items-center gap-2">
+                                                                                        <span className="inline-flex items-center justify-center w-6 h-6 rounded-lg text-xs text-white"
+                                                                                              style={{background: "linear-gradient(135deg, #06b6d4, #0284c7)"}}>{i + 1}</span>
+                                                                                        {issue.title}
+                                                                                    </p>
+                                                                                    {issue.background && (
+                                                                                        <div>
+                                                                                            <p className="text-[10px] font-black text-cyan-700 uppercase tracking-widest mb-1">背景說明</p>
+                                                                                            <p className="text-slate-700 leading-relaxed">{issue.background}</p>
+                                                                                        </div>
+                                                                                    )}
+                                                                                    {issue.discussion_points?.length > 0 && (
+                                                                                        <div>
+                                                                                            <p className="text-[10px] font-black text-cyan-700 uppercase tracking-widest mb-1">研議要點</p>
+                                                                                            <ul className="space-y-1.5">
+                                                                                                {issue.discussion_points.map((pt: string, j: number) => (
+                                                                                                    <li key={j} className="flex gap-2 text-slate-700 leading-relaxed">
+                                                                                                        <span className="text-sky-500 font-black shrink-0 mt-0.5">▸</span>
+                                                                                                        <span>{pt}</span>
+                                                                                                    </li>
+                                                                                                ))}
+                                                                                            </ul>
+                                                                                        </div>
+                                                                                    )}
+                                                                                    {issue.conclusion && (
+                                                                                        <div className="rounded-xl px-3.5 py-2.5"
+                                                                                             style={{
+                                                                                                 background: "linear-gradient(135deg, rgba(207,250,254,0.9), rgba(219,234,254,0.9))",
+                                                                                                 border: "1px solid rgba(34,211,238,0.45)",
+                                                                                             }}>
+                                                                                            <p className="text-[10px] font-black text-cyan-700 uppercase tracking-widest mb-0.5 flex items-center gap-1">
+                                                                                                <span>✓</span>共識決議
+                                                                                            </p>
+                                                                                            <p className="text-slate-900 font-medium leading-relaxed">{issue.conclusion}</p>
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+
+                                                                {/* 二、待辦事項與行動計畫 */}
+                                                                {summaries[m.id].action_items?.length > 0 && (
+                                                                    <div>
+                                                                        <SectionHeader emoji="✅" label="二、待辦事項與行動計畫" tone="sky" />
+                                                                        <div className="mt-3 overflow-x-auto rounded-2xl"
+                                                                             style={{
+                                                                                 background: "rgba(255,255,255,0.9)",
+                                                                                 border: "1px solid rgba(186,230,253,0.7)",
+                                                                                 boxShadow: "0 4px 12px -6px rgba(8,47,73,0.08)",
+                                                                             }}>
+                                                                            <table className="w-full text-xs">
+                                                                                <thead>
+                                                                                    <tr style={{background: "linear-gradient(135deg, rgba(207,250,254,0.85), rgba(219,234,254,0.85))"}}>
+                                                                                        <th className="text-left px-3 py-2.5 font-black text-cyan-900 uppercase tracking-wider w-10">#</th>
+                                                                                        <th className="text-left px-3 py-2.5 font-black text-cyan-900 uppercase tracking-wider">任務描述</th>
+                                                                                        <th className="text-left px-3 py-2.5 font-black text-cyan-900 uppercase tracking-wider whitespace-nowrap">負責單位</th>
+                                                                                        <th className="text-left px-3 py-2.5 font-black text-cyan-900 uppercase tracking-wider whitespace-nowrap">預計時限</th>
+                                                                                    </tr>
+                                                                                </thead>
+                                                                                <tbody>
+                                                                                    {summaries[m.id].action_items.map((item: any, i: number) => (
+                                                                                        <tr key={i} className="hover:bg-cyan-50/60 transition-colors" style={{borderTop: "1px solid rgba(186,230,253,0.45)"}}>
+                                                                                            <td className="px-3 py-2.5 text-cyan-700 font-black">{item.id ?? i + 1}</td>
+                                                                                            <td className="px-3 py-2.5 text-slate-800">{item.task}</td>
+                                                                                            <td className="px-3 py-2.5 text-slate-600">{item.owner}</td>
+                                                                                            <td className="px-3 py-2.5 text-slate-600">{item.deadline}</td>
+                                                                                        </tr>
+                                                                                    ))}
+                                                                                </tbody>
+                                                                            </table>
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+
+                                                                {/* 三、補充說明 */}
+                                                                {summaries[m.id].notes && (
+                                                                    <div>
+                                                                        <SectionHeader emoji="📎" label="三、補充說明" tone="blue" />
+                                                                        <p className="mt-3 text-slate-700 leading-relaxed rounded-xl px-4 py-3"
+                                                                           style={{
+                                                                               background: "rgba(255,255,255,0.85)",
+                                                                               border: "1px solid rgba(186,230,253,0.7)",
+                                                                           }}>{summaries[m.id].notes}</p>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 底部資訊列 */}
+                            <div className="mt-8 rounded-2xl p-5 flex items-center gap-3"
+                                 style={{
+                                     background: "rgba(255,255,255,0.6)",
+                                     border: "1px solid rgba(255,255,255,0.85)",
+                                     backdropFilter: "blur(20px)",
+                                     boxShadow: "0 8px 24px rgba(8,47,73,0.06)",
+                                 }}>
+                                <div className="w-10 h-10 rounded-full bg-cyan-100 flex items-center justify-center text-xl shrink-0">🔒</div>
+                                <div>
+                                    <div className="text-slate-900 font-black text-sm">隱私保護</div>
+                                    <div className="text-slate-600 text-xs mt-0.5 leading-relaxed">逐字稿透過本機 LM Studio 推論，內容不會經過第三方雲端 LLM 服務</div>
                                 </div>
                             </div>
                         </div>
+
+                        <style jsx>{`
+                            @keyframes meetingPulse {
+                                0%, 100% { opacity: 0.7; transform: scale(1); }
+                                50% { opacity: 1; transform: scale(1.4); box-shadow: 0 0 12px rgba(6,182,212,0.6); }
+                            }
+                        `}</style>
                     </div>
                 )}
             </div>
@@ -607,6 +796,60 @@ export default function FullTimePage() {
                     />
                 </div>
             )}
+        </>
+    );
+}
+
+// ===== 會議紀錄區塊用的小元件 =====
+function SectionHeader({ emoji, label, tone }: { emoji: string; label: string; tone: "cyan" | "sky" | "blue" }) {
+    const toneMap = {
+        cyan: { bg: "linear-gradient(135deg, #06b6d4, #0284c7)", chip: "rgba(207,250,254,0.85)", text: "#0e7490" },
+        sky:  { bg: "linear-gradient(135deg, #0ea5e9, #0369a1)", chip: "rgba(224,242,254,0.85)", text: "#075985" },
+        blue: { bg: "linear-gradient(135deg, #3b82f6, #1e40af)", chip: "rgba(219,234,254,0.85)", text: "#1e3a8a" },
+    };
+    const t = toneMap[tone];
+    return (
+        <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm shrink-0" style={{background: t.bg, boxShadow: "0 6px 14px -6px rgba(8,47,73,0.35)"}}>
+                {emoji}
+            </div>
+            <p className="font-black text-slate-900 text-sm md:text-base">{label}</p>
+        </div>
+    );
+}
+
+function MeetingDecor() {
+    return (
+        <>
+            <div className="absolute top-20 left-[10%] w-2 h-2 bg-cyan-400 rounded-full" style={{animation: "meetFloat 4s ease-in-out infinite"}} />
+            <div className="absolute top-40 right-[18%] w-1.5 h-1.5 bg-sky-400 rounded-full" style={{animation: "meetFloat 4s ease-in-out infinite 1s"}} />
+            <div className="absolute bottom-32 left-[22%] w-2 h-2 bg-blue-400 rounded-full" style={{animation: "meetFloat 4s ease-in-out infinite 2s"}} />
+            <div className="absolute top-1/2 right-[8%] w-3 h-3 bg-cyan-300 rounded-full" style={{animation: "meetFloat 4s ease-in-out infinite 0.5s"}} />
+            <svg className="absolute top-12 right-10 w-32 h-32 opacity-20 pointer-events-none" viewBox="0 0 200 200" fill="none" style={{color: "#0284c7", animation: "meetSpin 18s linear infinite"}}>
+                <circle cx="100" cy="100" r="60" stroke="currentColor" strokeWidth="2" strokeDasharray="4 6"/>
+                <circle cx="100" cy="100" r="90" stroke="currentColor" strokeWidth="1" strokeDasharray="2 8"/>
+                <rect x="80" y="80" width="40" height="40" rx="6" fill="currentColor" opacity="0.4"/>
+            </svg>
+            <svg className="absolute bottom-16 left-8 w-24 h-24 opacity-20 pointer-events-none" viewBox="0 0 200 200" fill="currentColor" style={{color: "#06b6d4", animation: "meetBob 6s ease-in-out infinite"}}>
+                <rect x="40" y="60" width="120" height="14" rx="3"/>
+                <rect x="40" y="90" width="90" height="14" rx="3"/>
+                <rect x="40" y="120" width="120" height="14" rx="3"/>
+                <rect x="40" y="150" width="60" height="14" rx="3"/>
+            </svg>
+            <style jsx>{`
+                @keyframes meetFloat {
+                    0%, 100% { opacity: 0.55; transform: translateY(0) scale(1); }
+                    50% { opacity: 1; transform: translateY(-8px) scale(1.25); }
+                }
+                @keyframes meetSpin {
+                    0% { transform: rotate(0deg); }
+                    100% { transform: rotate(360deg); }
+                }
+                @keyframes meetBob {
+                    0%, 100% { transform: translateY(0); }
+                    50% { transform: translateY(-10px); }
+                }
+            `}</style>
         </>
     );
 }

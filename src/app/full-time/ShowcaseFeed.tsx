@@ -116,7 +116,11 @@ export default function ShowcaseFeed() {
         const total = posts.length;
         const scenarioCount: Record<string, number> = {};
         const toolCount: Record<string, number> = {};
-        const userCount: Record<string, { name: string; photo: string | null; count: number }> = {};
+        const userCount: Record<string, { name: string; photo: string | null; count: number; latest: number }> = {};
+
+        let totalLikes = 0;
+        let weekNew = 0;
+        const oneWeekAgo = Date.now() - 7 * 86400 * 1000;
 
         posts.forEach((p) => {
             if (p.scenario) {
@@ -125,11 +129,20 @@ export default function ShowcaseFeed() {
             (p.tools || []).forEach((t) => {
                 toolCount[t] = (toolCount[t] || 0) + 1;
             });
+            totalLikes += p.likes || 0;
+            const createdMs: number = (() => {
+                const ts = p.createdAt;
+                if (ts && typeof ts.toDate === "function") return (ts.toDate() as Date).getTime();
+                return 0;
+            })();
+            if (createdMs && createdMs >= oneWeekAgo) weekNew += 1;
+
             const key = p.authorEmail || p.authorName || "unknown";
             if (!userCount[key]) {
-                userCount[key] = { name: p.authorName || "匿名", photo: p.authorPhoto || null, count: 0 };
+                userCount[key] = { name: p.authorName || "匿名", photo: p.authorPhoto || null, count: 0, latest: 0 };
             }
             userCount[key].count += 1;
+            if (createdMs > userCount[key].latest) userCount[key].latest = createdMs;
         });
 
         const scenarioRanking = Object.entries(scenarioCount)
@@ -140,8 +153,16 @@ export default function ShowcaseFeed() {
             .map(([email, v]) => ({ email, ...v }))
             .sort((a, b) => b.count - a.count);
 
+        // 最近活動時間軸（按時間倒序前 6 筆）
+        const recentTimeline = [...posts]
+            .filter((p) => p.createdAt?.toDate)
+            .sort((a, b) => (b.createdAt.toDate() as Date).getTime() - (a.createdAt.toDate() as Date).getTime())
+            .slice(0, 6);
+
         return {
             total,
+            totalLikes,
+            weekNew,
             scenarioRanking,
             toolRanking,
             userRanking,
@@ -149,6 +170,8 @@ export default function ShowcaseFeed() {
             topTool: toolRanking[0] || null,
             uniqueTools: toolRanking.length,
             uniqueScenarios: scenarioRanking.length,
+            uniqueAuthors: userRanking.length,
+            recentTimeline,
         };
     }, [posts]);
 
@@ -383,157 +406,224 @@ export default function ShowcaseFeed() {
     };
 
     return (
-        <div className="bg-slate-50 min-h-full">
-            <div className="max-w-2xl mx-auto py-8 px-4">
-                {/* 頁首 */}
-                <div className="flex justify-between items-center mb-6">
-                    <div>
-                        <h2 className="text-2xl font-black text-slate-800 flex items-center gap-2">
-                            <span>🌟</span> 成果分享動態牆
-                        </h2>
-                        <p className="text-sm text-slate-500 mt-1">分享你用 AI 改造的成果，互相學習</p>
+        <div className="relative overflow-hidden min-h-full" style={{
+            background: `
+                radial-gradient(ellipse 70% 55% at 15% 18%, rgba(251,207,232,0.55), transparent 60%),
+                radial-gradient(ellipse 55% 45% at 85% 22%, rgba(245,208,254,0.55), transparent 60%),
+                radial-gradient(ellipse 65% 50% at 50% 100%, rgba(233,213,255,0.55), transparent 60%),
+                radial-gradient(ellipse 50% 40% at 78% 78%, rgba(252,165,165,0.30), transparent 60%),
+                linear-gradient(135deg, #fdf2f8 0%, #fae8ff 50%, #faf5ff 100%)
+            `,
+        }}>
+            {/* 浮動裝飾 */}
+            <ShowcaseDecor />
+
+            <div className="max-w-3xl mx-auto py-12 md:py-16 px-4 md:px-6 relative z-10">
+                {/* Hero 標題 */}
+                <header className="text-center mb-10">
+                    <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full mb-6"
+                         style={{background: "rgba(255,255,255,0.85)", border: "1px solid rgba(255,255,255,0.95)", boxShadow: "0 2px 8px rgba(131,24,67,0.06)"}}>
+                        <span className="w-2 h-2 bg-rose-500 rounded-full" style={{animation: "showcasePulse 2.4s ease-in-out infinite"}} />
+                        <span className="text-xs font-bold text-slate-700">{stats.total} 篇成果 · {stats.uniqueScenarios} 種應用場景</span>
                     </div>
+                    <h1 className="text-3xl md:text-5xl font-black tracking-tight mb-4 text-slate-900 leading-tight">
+                        <span style={{
+                            background: "linear-gradient(135deg, #ec4899 0%, #d946ef 50%, #a855f7 100%)",
+                            WebkitBackgroundClip: "text",
+                            backgroundClip: "text",
+                            color: "transparent",
+                        }}>成果</span>
+                        <span className="text-slate-900">分享動態牆</span>
+                    </h1>
+                    <p className="text-sm md:text-base text-slate-600 max-w-xl mx-auto leading-relaxed mb-6">
+                        分享你用 AI 改造的工作流，<br className="hidden md:block"/>
+                        看看同事們做了什麼酷東西，互相啟發
+                    </p>
                     <button
                         onClick={() => setShowUpload((s) => !s)}
-                        className="px-4 py-2.5 bg-blue-900 text-white rounded-xl font-bold text-sm shadow-md hover:bg-blue-800 transition-all flex items-center gap-2"
+                        className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl text-white font-black text-sm transition-all active:scale-[0.98]"
+                        style={{
+                            background: showUpload
+                                ? "linear-gradient(135deg, #94a3b8, #64748b)"
+                                : "linear-gradient(135deg, #ec4899 0%, #d946ef 50%, #a855f7 100%)",
+                            boxShadow: showUpload
+                                ? "0 8px 18px -6px rgba(100,116,139,0.5)"
+                                : "0 14px 30px -10px rgba(217,70,239,0.55), inset 0 1px 0 rgba(255,255,255,0.3)",
+                        }}
                     >
-                        <span className="text-lg leading-none">+</span>
-                        <span>{showUpload ? "收起" : "發表新成果"}</span>
+                        <span className="text-lg leading-none">{showUpload ? "✕" : "✨"}</span>
+                        <span>{showUpload ? "收起發表表單" : "發表新成果"}</span>
                     </button>
-                </div>
+                </header>
 
                 {/* ===== 儀表板（最顯眼的英雄區塊）===== */}
                 {!loading && posts.length > 0 && (
-                    <section className="mb-8">
-                        {/* 主視覺：三個 KPI + 分享之王 */}
-                        <div className="relative bg-gradient-to-br from-blue-900 via-indigo-900 to-purple-900 rounded-3xl shadow-2xl overflow-hidden mb-4">
-                            {/* 背景裝飾 */}
-                            <div className="absolute top-0 right-0 w-64 h-64 bg-yellow-400/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/4" />
-                            <div className="absolute bottom-0 left-0 w-64 h-64 bg-pink-400/10 rounded-full blur-3xl translate-y-1/2 -translate-x-1/4" />
+                    <section className="mb-10 space-y-4">
+                        {/* === 主 KPI 區（暗色玻璃漸層） === */}
+                        <div className="relative rounded-3xl overflow-hidden"
+                             style={{
+                                 background: "linear-gradient(135deg, #831843 0%, #86198f 45%, #581c87 100%)",
+                                 boxShadow: "0 24px 56px -16px rgba(131,24,67,0.45), inset 0 1px 0 rgba(255,255,255,0.18)",
+                             }}>
+                            {/* 背景裝飾光暈 */}
+                            <div className="absolute top-0 right-0 w-72 h-72 rounded-full blur-3xl -translate-y-1/3 translate-x-1/4"
+                                 style={{background: "radial-gradient(circle, rgba(251,191,36,0.32), transparent 70%)", animation: "dashGlowA 6s ease-in-out infinite"}} />
+                            <div className="absolute bottom-0 left-0 w-72 h-72 rounded-full blur-3xl translate-y-1/3 -translate-x-1/4"
+                                 style={{background: "radial-gradient(circle, rgba(244,114,182,0.32), transparent 70%)", animation: "dashGlowB 6s ease-in-out infinite 1.5s"}} />
+                            <div className="absolute top-1/2 left-1/2 w-96 h-96 rounded-full blur-3xl -translate-y-1/2 -translate-x-1/2"
+                                 style={{background: "radial-gradient(circle, rgba(216,180,254,0.18), transparent 70%)", animation: "dashGlowA 8s ease-in-out infinite 3s"}} />
 
                             <div className="relative p-6 md:p-8">
-                                <div className="flex items-center gap-2 mb-5">
-                                    <span className="text-2xl">📊</span>
-                                    <h3 className="text-lg md:text-xl font-black text-white tracking-wide">
+                                <div className="flex items-center gap-2 mb-6">
+                                    <div className="w-9 h-9 rounded-xl flex items-center justify-center text-lg"
+                                         style={{background: "rgba(255,255,255,0.18)", border: "1px solid rgba(255,255,255,0.25)"}}>📊</div>
+                                    <h3 className="text-base md:text-lg font-black text-white tracking-wide">
                                         平台統計儀表板
                                     </h3>
-                                    <span className="ml-auto text-[10px] font-bold uppercase tracking-widest text-white/50">
-                                        Live · 即時更新
+                                    <span className="ml-auto inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-white/80 px-2.5 py-1 rounded-full"
+                                          style={{background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.22)"}}>
+                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-300" style={{animation: "showcasePulse 2.4s ease-in-out infinite"}} />
+                                        Live
                                     </span>
                                 </div>
 
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                    {/* 案例總數 */}
-                                    <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-5 border border-white/20">
-                                        <p className="text-xs font-bold text-white/70 uppercase tracking-wider mb-2">
-                                            📚 案例總數
-                                        </p>
-                                        <p className="text-4xl md:text-5xl font-black text-white">
-                                            {stats.total}
-                                            <span className="text-base font-bold text-white/60 ml-1">篇</span>
-                                        </p>
-                                        <p className="text-xs text-white/60 mt-1">
-                                            涵蓋 {stats.uniqueScenarios} 種應用場景
-                                        </p>
-                                    </div>
-
-                                    {/* 分享之王 */}
-                                    {stats.topUser && (
-                                        <div className="bg-gradient-to-br from-yellow-400/20 to-orange-500/20 backdrop-blur-sm rounded-2xl p-5 border-2 border-yellow-300/40 relative overflow-hidden">
-                                            <div className="absolute -top-3 -right-3 text-5xl rotate-12 opacity-30">👑</div>
-                                            <p className="text-xs font-bold text-yellow-200 uppercase tracking-wider mb-2 flex items-center gap-1">
-                                                <span>👑</span> 分享之王
+                                {/* 4 個 KPI */}
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                    {[
+                                        { icon: "📚", label: "案例總數", value: stats.total, suffix: " 篇", sub: `${stats.uniqueScenarios} 種場景` },
+                                        { icon: "✨", label: "本週新增", value: stats.weekNew, suffix: " 篇", sub: "近 7 天" },
+                                        { icon: "❤️", label: "累積愛心", value: stats.totalLikes, suffix: "", sub: "總按讚數" },
+                                        { icon: "👥", label: "活躍作者", value: stats.uniqueAuthors, suffix: " 人", sub: "曾發表過" },
+                                    ].map((kpi, idx) => (
+                                        <div key={idx} className="rounded-2xl p-4 md:p-5 transition-all hover:-translate-y-0.5"
+                                             style={{
+                                                 background: "rgba(255,255,255,0.1)",
+                                                 backdropFilter: "blur(12px)",
+                                                 border: "1px solid rgba(255,255,255,0.22)",
+                                                 boxShadow: "inset 0 1px 0 rgba(255,255,255,0.18)",
+                                             }}>
+                                            <p className="text-[10px] font-black text-white/70 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                                                <span>{kpi.icon}</span> {kpi.label}
                                             </p>
-                                            <div className="flex items-center gap-2.5">
-                                                {stats.topUser.photo ? (
-                                                    /* eslint-disable-next-line @next/next/no-img-element */
-                                                    <img src={stats.topUser.photo} alt="" className="w-10 h-10 rounded-full ring-2 ring-yellow-300" />
-                                                ) : (
-                                                    <div className="w-10 h-10 rounded-full bg-yellow-400 text-blue-900 flex items-center justify-center font-black ring-2 ring-yellow-300">
-                                                        {(stats.topUser.name || "?")[0]}
-                                                    </div>
-                                                )}
+                                            <p className="text-3xl md:text-4xl font-black text-white leading-none">
+                                                <AnimatedNumber value={kpi.value} duration={1100 + idx * 120} suffix={kpi.suffix} />
+                                            </p>
+                                            <p className="text-[11px] text-white/60 mt-2">{kpi.sub}</p>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* 分享之王 占整列 */}
+                                {stats.topUser && (
+                                    <div className="relative rounded-2xl p-5 mt-3 overflow-hidden"
+                                         style={{
+                                             background: "linear-gradient(135deg, rgba(251,191,36,0.28), rgba(249,115,22,0.20))",
+                                             backdropFilter: "blur(12px)",
+                                             border: "1.5px solid rgba(252,211,77,0.55)",
+                                             boxShadow: "inset 0 1px 0 rgba(255,255,255,0.25), 0 8px 18px -6px rgba(245,158,11,0.45)",
+                                         }}>
+                                        <div className="absolute -top-6 -right-6 text-7xl opacity-25 select-none pointer-events-none"
+                                             style={{animation: "crownFloat 4s ease-in-out infinite"}}>👑</div>
+                                        <div className="flex items-center justify-between gap-4 flex-wrap relative">
+                                            <div className="flex items-center gap-3">
+                                                <div className="relative shrink-0">
+                                                    {stats.topUser.photo ? (
+                                                        /* eslint-disable-next-line @next/next/no-img-element */
+                                                        <img src={stats.topUser.photo} alt="" className="w-14 h-14 rounded-full ring-4 ring-amber-300/70" />
+                                                    ) : (
+                                                        <div className="w-14 h-14 rounded-full bg-amber-400 text-rose-900 flex items-center justify-center font-black text-lg ring-4 ring-amber-300/70">
+                                                            {(stats.topUser.name || "?")[0]}
+                                                        </div>
+                                                    )}
+                                                    <span className="absolute -top-2 -left-2 text-xl" style={{filter: "drop-shadow(0 0 6px rgba(252,211,77,0.7))"}}>👑</span>
+                                                </div>
                                                 <div className="min-w-0">
-                                                    <p className="text-base font-black text-white truncate">
-                                                        {stats.topUser.name}
-                                                    </p>
-                                                    <p className="text-xs text-yellow-200 font-bold">
-                                                        共分享 {stats.topUser.count} 篇
+                                                    <p className="text-[10px] font-black text-amber-100 uppercase tracking-widest mb-1">本月分享之王</p>
+                                                    <p className="text-lg md:text-xl font-black text-white truncate leading-tight">{stats.topUser.name}</p>
+                                                    <p className="text-[11px] text-amber-200 font-bold mt-0.5">
+                                                        ✨ 共分享 <AnimatedNumber value={stats.topUser.count} duration={1300} /> 篇 · 啟發大家不遺餘力
                                                     </p>
                                                 </div>
                                             </div>
+                                            {stats.topTool && (
+                                                <div className="rounded-xl px-4 py-3 shrink-0"
+                                                     style={{background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.22)"}}>
+                                                    <p className="text-[10px] font-black text-white/70 uppercase tracking-widest mb-1 flex items-center gap-1.5">
+                                                        <span>🔥</span> 最熱門工具
+                                                    </p>
+                                                    <p className="text-base md:text-lg font-black text-white">{stats.topTool[0]}</p>
+                                                    <p className="text-[10px] text-white/70 font-bold">用過 {stats.topTool[1]} 次</p>
+                                                </div>
+                                            )}
                                         </div>
-                                    )}
-
-                                    {/* 熱門工具 */}
-                                    {stats.topTool && (
-                                        <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-5 border border-white/20">
-                                            <p className="text-xs font-bold text-white/70 uppercase tracking-wider mb-2">
-                                                🔥 最熱門工具
-                                            </p>
-                                            <p className="text-2xl md:text-3xl font-black text-white truncate">
-                                                {stats.topTool[0]}
-                                            </p>
-                                            <p className="text-xs text-white/60 mt-1">
-                                                被使用 <span className="font-bold text-white">{stats.topTool[1]}</span> 次 · 共 {stats.uniqueTools} 種工具
-                                            </p>
-                                        </div>
-                                    )}
-                                </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
 
-                        {/* 兩欄圖表：分享類型 + 工具排行 */}
+                        {/* === 雙欄：分享類型環形圖 + 工具排行條狀圖 === */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {/* 分享類型分布 */}
-                            <div className="bg-white rounded-2xl border border-slate-200 shadow-md p-5">
+                            {/* 分享類型分布 → DonutChart */}
+                            <div className="rounded-2xl p-5"
+                                 style={{
+                                     background: "rgba(255,255,255,0.72)",
+                                     backdropFilter: "blur(20px) saturate(180%)",
+                                     border: "1px solid rgba(255,255,255,0.95)",
+                                     boxShadow: "0 12px 28px -12px rgba(131,24,67,0.14), inset 0 1px 0 rgba(255,255,255,0.95)",
+                                 }}>
                                 <div className="flex items-center gap-2 mb-4">
-                                    <span className="text-lg">📋</span>
-                                    <h4 className="text-sm font-black text-slate-800">分享類型分布</h4>
-                                    <span className="ml-auto text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                    <div className="w-8 h-8 rounded-lg flex items-center justify-center text-sm"
+                                         style={{background: "linear-gradient(135deg, #f0abfc, #c084fc)", color: "#fff"}}>📋</div>
+                                    <h4 className="text-sm font-black text-slate-900">分享類型分布</h4>
+                                    <span className="ml-auto text-[10px] font-black text-slate-500 uppercase tracking-wider px-2 py-0.5 rounded-full bg-fuchsia-50 border border-fuchsia-100">
                                         {stats.uniqueScenarios} 類
                                     </span>
                                 </div>
-                                <div className="space-y-2.5">
-                                    {stats.scenarioRanking.slice(0, 6).map(([name, count], idx) => {
-                                        const max = stats.scenarioRanking[0]?.[1] || 1;
-                                        const pct = (count / max) * 100;
-                                        const colors = [
-                                            "from-emerald-500 to-emerald-400",
-                                            "from-teal-500 to-teal-400",
-                                            "from-cyan-500 to-cyan-400",
-                                            "from-sky-500 to-sky-400",
-                                            "from-blue-500 to-blue-400",
-                                            "from-indigo-500 to-indigo-400",
-                                        ];
-                                        return (
-                                            <div key={name}>
-                                                <div className="flex justify-between items-center mb-1">
-                                                    <span className="text-xs font-bold text-slate-700">
-                                                        #{name}
-                                                    </span>
-                                                    <span className="text-xs font-black text-slate-500">
-                                                        {count}
-                                                    </span>
-                                                </div>
-                                                <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                                                    <div
-                                                        className={`h-full bg-gradient-to-r ${colors[idx % colors.length]} rounded-full transition-all duration-500`}
-                                                        style={{ width: `${pct}%` }}
-                                                    />
-                                                </div>
+                                {(() => {
+                                    const palette = ["#ec4899", "#d946ef", "#a855f7", "#8b5cf6", "#f43f5e", "#f97316"];
+                                    const donutData = stats.scenarioRanking.slice(0, 6).map(([label, value], i) => ({
+                                        label, value, color: palette[i % palette.length],
+                                    }));
+                                    const showTotal = donutData.reduce((s, d) => s + d.value, 0);
+                                    return (
+                                        <div className="flex items-center gap-4">
+                                            <DonutChart
+                                                data={donutData}
+                                                size={150}
+                                                thickness={20}
+                                                centerLabel={`${showTotal}`}
+                                                centerSubLabel="篇"
+                                            />
+                                            <div className="flex-1 min-w-0 space-y-1.5">
+                                                {donutData.map((seg) => {
+                                                    const pct = ((seg.value / showTotal) * 100).toFixed(0);
+                                                    return (
+                                                        <div key={seg.label} className="flex items-center gap-2 text-xs">
+                                                            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{background: seg.color}} />
+                                                            <span className="font-bold text-slate-800 truncate flex-1">#{seg.label}</span>
+                                                            <span className="font-black text-slate-500 text-[11px]">{pct}%</span>
+                                                        </div>
+                                                    );
+                                                })}
                                             </div>
-                                        );
-                                    })}
-                                </div>
+                                        </div>
+                                    );
+                                })()}
                             </div>
 
-                            {/* 工具使用排行 */}
-                            <div className="bg-white rounded-2xl border border-slate-200 shadow-md p-5">
+                            {/* 工具使用排行（條狀圖，加 0→目標動畫） */}
+                            <div className="rounded-2xl p-5"
+                                 style={{
+                                     background: "rgba(255,255,255,0.72)",
+                                     backdropFilter: "blur(20px) saturate(180%)",
+                                     border: "1px solid rgba(255,255,255,0.95)",
+                                     boxShadow: "0 12px 28px -12px rgba(131,24,67,0.14), inset 0 1px 0 rgba(255,255,255,0.95)",
+                                 }}>
                                 <div className="flex items-center gap-2 mb-4">
-                                    <span className="text-lg">🛠️</span>
-                                    <h4 className="text-sm font-black text-slate-800">最常使用的工具</h4>
-                                    <span className="ml-auto text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                    <div className="w-8 h-8 rounded-lg flex items-center justify-center text-sm"
+                                         style={{background: "linear-gradient(135deg, #fb7185, #ec4899)", color: "#fff"}}>🛠️</div>
+                                    <h4 className="text-sm font-black text-slate-900">最常使用的工具</h4>
+                                    <span className="ml-auto text-[10px] font-black text-slate-500 uppercase tracking-wider px-2 py-0.5 rounded-full bg-rose-50 border border-rose-100">
                                         Top {Math.min(6, stats.uniqueTools)}
                                     </span>
                                 </div>
@@ -544,19 +634,99 @@ export default function ShowcaseFeed() {
                                         const medals = ["🥇", "🥈", "🥉"];
                                         return (
                                             <div key={name}>
-                                                <div className="flex justify-between items-center mb-1">
-                                                    <span className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                                                        {medals[idx] || <span className="text-slate-400 w-4 text-center">{idx + 1}</span>}
+                                                <div className="flex justify-between items-center mb-1.5">
+                                                    <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                                                        {medals[idx] || <span className="text-slate-400 w-4 text-center font-black">{idx + 1}</span>}
                                                         {name}
                                                     </span>
                                                     <span className="text-xs font-black text-slate-500">
                                                         {count} 次
                                                     </span>
                                                 </div>
-                                                <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                                                    <div
-                                                        className="h-full bg-gradient-to-r from-blue-600 to-blue-400 rounded-full transition-all duration-500"
-                                                        style={{ width: `${pct}%` }}
+                                                <AnimatedBar
+                                                    widthPct={pct}
+                                                    gradient="linear-gradient(90deg, #ec4899, #d946ef, #a855f7)"
+                                                    delay={idx * 90}
+                                                />
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* === 分享之星榜 Top 5 === */}
+                        {stats.userRanking.length > 1 && (
+                            <div className="rounded-2xl p-5"
+                                 style={{
+                                     background: "rgba(255,255,255,0.72)",
+                                     backdropFilter: "blur(20px) saturate(180%)",
+                                     border: "1px solid rgba(255,255,255,0.95)",
+                                     boxShadow: "0 12px 28px -12px rgba(131,24,67,0.14), inset 0 1px 0 rgba(255,255,255,0.95)",
+                                 }}>
+                                <div className="flex items-center gap-2 mb-4">
+                                    <div className="w-8 h-8 rounded-lg flex items-center justify-center text-sm"
+                                         style={{background: "linear-gradient(135deg, #fbbf24, #f59e0b)", color: "#fff"}}>🏆</div>
+                                    <h4 className="text-sm font-black text-slate-900">分享之星 Top 5</h4>
+                                    <span className="ml-auto text-[10px] font-black text-slate-500 uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-50 border border-amber-100">
+                                        Leaderboard
+                                    </span>
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2.5">
+                                    {stats.userRanking.slice(0, 5).map((u, idx) => {
+                                        const medals = ["🥇", "🥈", "🥉"];
+                                        const rankBg = idx === 0
+                                            ? "linear-gradient(135deg, rgba(254,243,199,0.95), rgba(254,215,170,0.85))"
+                                            : idx === 1
+                                                ? "linear-gradient(135deg, rgba(243,244,246,0.95), rgba(229,231,235,0.85))"
+                                                : idx === 2
+                                                    ? "linear-gradient(135deg, rgba(254,226,226,0.85), rgba(254,202,202,0.75))"
+                                                    : "rgba(255,255,255,0.85)";
+                                        const rankBorder = idx === 0 ? "rgba(251,191,36,0.55)"
+                                            : idx === 1 ? "rgba(156,163,175,0.5)"
+                                                : idx === 2 ? "rgba(248,113,113,0.5)"
+                                                    : "rgba(244,182,255,0.4)";
+                                        const maxCount = stats.userRanking[0]?.count || 1;
+                                        const barPct = (u.count / maxCount) * 100;
+                                        return (
+                                            <div key={u.email}
+                                                 className="rounded-xl p-3 transition-all hover:-translate-y-0.5 flex flex-col items-center gap-1.5"
+                                                 style={{
+                                                     background: rankBg,
+                                                     border: `1.5px solid ${rankBorder}`,
+                                                     boxShadow: idx < 3 ? "0 6px 16px -8px rgba(245,158,11,0.35)" : "0 4px 12px -8px rgba(131,24,67,0.1)",
+                                                 }}>
+                                                <div className="relative">
+                                                    {u.photo ? (
+                                                        /* eslint-disable-next-line @next/next/no-img-element */
+                                                        <img src={u.photo} alt="" className="w-12 h-12 rounded-full ring-2 ring-white" />
+                                                    ) : (
+                                                        <div className="w-12 h-12 rounded-full flex items-center justify-center font-black text-white"
+                                                             style={{background: "linear-gradient(135deg, #ec4899, #d946ef, #a855f7)"}}>
+                                                            {(u.name || "?")[0]}
+                                                        </div>
+                                                    )}
+                                                    <span className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center text-xs font-black text-white"
+                                                          style={{
+                                                              background: idx < 3
+                                                                  ? "linear-gradient(135deg, #fbbf24, #f59e0b)"
+                                                                  : "linear-gradient(135deg, #94a3b8, #64748b)",
+                                                              border: "2px solid #fff",
+                                                          }}>
+                                                        {medals[idx] || idx + 1}
+                                                    </span>
+                                                </div>
+                                                <p className="text-xs font-black text-slate-900 text-center truncate w-full mt-1">{u.name}</p>
+                                                <p className="text-[10px] font-bold text-slate-500">
+                                                    <AnimatedNumber value={u.count} duration={1100 + idx * 120} /> 篇
+                                                </p>
+                                                <div className="w-full mt-1">
+                                                    <AnimatedBar
+                                                        widthPct={barPct}
+                                                        gradient={idx === 0
+                                                            ? "linear-gradient(90deg, #fbbf24, #f59e0b)"
+                                                            : "linear-gradient(90deg, #ec4899, #d946ef)"}
+                                                        delay={idx * 100}
                                                     />
                                                 </div>
                                             </div>
@@ -564,13 +734,102 @@ export default function ShowcaseFeed() {
                                     })}
                                 </div>
                             </div>
-                        </div>
+                        )}
+
+                        {/* === 最近活動時間軸 === */}
+                        {stats.recentTimeline.length > 0 && (
+                            <div className="rounded-2xl p-5"
+                                 style={{
+                                     background: "rgba(255,255,255,0.72)",
+                                     backdropFilter: "blur(20px) saturate(180%)",
+                                     border: "1px solid rgba(255,255,255,0.95)",
+                                     boxShadow: "0 12px 28px -12px rgba(131,24,67,0.14), inset 0 1px 0 rgba(255,255,255,0.95)",
+                                 }}>
+                                <div className="flex items-center gap-2 mb-4">
+                                    <div className="w-8 h-8 rounded-lg flex items-center justify-center text-sm"
+                                         style={{background: "linear-gradient(135deg, #a855f7, #7c3aed)", color: "#fff"}}>⏱️</div>
+                                    <h4 className="text-sm font-black text-slate-900">最近活動</h4>
+                                    <span className="ml-auto text-[10px] font-black text-slate-500 uppercase tracking-wider px-2 py-0.5 rounded-full bg-purple-50 border border-purple-100">
+                                        最新 {stats.recentTimeline.length} 篇
+                                    </span>
+                                </div>
+                                <div className="relative">
+                                    {/* 時間軸線 */}
+                                    <div className="absolute left-3 top-2 bottom-2 w-px"
+                                         style={{background: "linear-gradient(180deg, #ec4899, #d946ef, #a855f7, transparent)"}} />
+                                    <div className="space-y-3 pl-9">
+                                        {stats.recentTimeline.map((p, idx) => (
+                                            <div key={p.id} className="relative flex items-center gap-3 group">
+                                                {/* 時間軸節點 */}
+                                                <div className="absolute -left-9 w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-black"
+                                                     style={{
+                                                         background: "linear-gradient(135deg, #ec4899, #d946ef)",
+                                                         border: "2px solid rgba(255,255,255,0.95)",
+                                                         boxShadow: "0 4px 10px -4px rgba(217,70,239,0.5)",
+                                                     }}>
+                                                    {idx + 1}
+                                                </div>
+                                                {/* 縮圖 */}
+                                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                <img src={p.imageUrl} alt="" className="w-12 h-12 rounded-lg object-cover ring-1 ring-fuchsia-200 shrink-0" />
+                                                {/* 內容 */}
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="text-xs font-black text-slate-900 truncate group-hover:text-fuchsia-700 transition-colors">
+                                                        {p.caption || "（無標題）"}
+                                                    </p>
+                                                    <p className="text-[10px] text-slate-500 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                                                        <span className="font-bold">{p.authorName}</span>
+                                                        <span>·</span>
+                                                        <span>{formatTime(p.createdAt)}</span>
+                                                        {p.scenario && (
+                                                            <>
+                                                                <span>·</span>
+                                                                <span className="px-1.5 py-0.5 rounded font-bold text-[9px]"
+                                                                      style={{background: "rgba(209,250,229,0.85)", color: "#065f46", border: "1px solid rgba(110,231,183,0.5)"}}>
+                                                                    #{p.scenario}
+                                                                </span>
+                                                            </>
+                                                        )}
+                                                    </p>
+                                                </div>
+                                                {/* 按讚數小膠囊 */}
+                                                {(p.likes || 0) > 0 && (
+                                                    <div className="text-[10px] font-black text-rose-600 px-2 py-0.5 rounded-full shrink-0"
+                                                         style={{background: "rgba(254,226,226,0.85)", border: "1px solid rgba(251,113,133,0.4)"}}>
+                                                        ❤️ {p.likes}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </section>
                 )}
 
                 {/* ===== 上傳表單 ===== */}
                 {showUpload && (
-                    <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-slate-200 shadow-md p-6 mb-6 space-y-5">
+                    <form onSubmit={handleSubmit}
+                          className="rounded-3xl p-6 md:p-8 mb-8 space-y-5"
+                          style={{
+                              background: "rgba(255,255,255,0.78)",
+                              backdropFilter: "blur(20px) saturate(180%)",
+                              border: "1px solid rgba(255,255,255,0.95)",
+                              boxShadow: "0 24px 48px -16px rgba(131,24,67,0.18), inset 0 1px 0 rgba(255,255,255,0.95)",
+                          }}>
+                        <div className="flex items-center gap-3 pb-2 mb-2 border-b border-fuchsia-100/60">
+                            <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-lg shrink-0"
+                                 style={{
+                                     background: "linear-gradient(135deg, #ec4899 0%, #d946ef 100%)",
+                                     boxShadow: "0 10px 22px -8px rgba(217,70,239,0.55), inset 0 1px 0 rgba(255,255,255,0.3)",
+                                 }}>📝</div>
+                            <div>
+                                <h3 className="text-base md:text-lg font-black text-slate-900">發表新成果</h3>
+                                <p className="text-[12px] text-slate-500">分享一個你最近用 AI 完成的小成就</p>
+                            </div>
+                        </div>
+
                         {/* 圖片 */}
                         <Field label="封面圖" required>
                             <div className="relative group">
@@ -583,11 +842,20 @@ export default function ShowcaseFeed() {
                                 />
                                 {previewUrl ? (
                                     /* eslint-disable-next-line @next/next/no-img-element */
-                                    <img src={previewUrl} alt="預覽" className="w-full max-h-72 object-contain bg-slate-100 rounded-lg border border-slate-200" />
+                                    <img src={previewUrl} alt="預覽" className="w-full max-h-72 object-contain rounded-2xl border-2 border-fuchsia-100"
+                                         style={{background: "linear-gradient(135deg, #fdf2f8, #fae8ff)"}} />
                                 ) : (
-                                    <div className="w-full px-4 py-10 bg-slate-50 border-2 border-dashed border-slate-200 rounded-lg group-hover:border-blue-900 transition-all flex flex-col items-center justify-center gap-2">
-                                        <span className="text-3xl">📷</span>
-                                        <span className="text-sm text-slate-500 font-medium">點擊選擇圖片（10 MB 內）</span>
+                                    <div className="w-full px-4 py-10 rounded-2xl flex flex-col items-center justify-center gap-3 transition-all border-2 border-dashed border-fuchsia-200/80 group-hover:border-fuchsia-400 group-hover:bg-fuchsia-50/50"
+                                         style={{background: "rgba(255,255,255,0.5)"}}>
+                                        <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-white text-2xl"
+                                             style={{
+                                                 background: "linear-gradient(135deg, #f0abfc, #e879f9)",
+                                                 boxShadow: "0 10px 22px -8px rgba(217,70,239,0.5)",
+                                             }}>📷</div>
+                                        <div className="text-center">
+                                            <p className="text-sm font-bold text-slate-700">點擊選擇圖片</p>
+                                            <p className="text-[11px] text-slate-500 mt-0.5">最大 10 MB · JPG / PNG / WEBP</p>
+                                        </div>
                                     </div>
                                 )}
                             </div>
@@ -600,7 +868,7 @@ export default function ShowcaseFeed() {
                                 value={caption}
                                 onChange={(e) => setCaption(e.target.value)}
                                 placeholder="例如：用 n8n 自動整理每週信件摘要"
-                                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-900 focus:bg-white transition-all"
+                                className="w-full px-4 py-2.5 bg-white/80 border border-fuchsia-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-fuchsia-400 focus:bg-white transition-all text-sm"
                             />
                         </Field>
 
@@ -614,11 +882,15 @@ export default function ShowcaseFeed() {
                                             type="button"
                                             key={t}
                                             onClick={() => toggleTool(t)}
-                                            className={`text-xs font-bold px-3 py-1.5 rounded-full border-2 transition-all ${
-                                                active
-                                                    ? "bg-blue-900 text-white border-blue-900"
-                                                    : "bg-white text-slate-600 border-slate-200 hover:border-blue-400"
-                                            }`}
+                                            className="text-xs font-bold px-3 py-1.5 rounded-full transition-all"
+                                            style={{
+                                                background: active
+                                                    ? "linear-gradient(135deg, #ec4899, #d946ef)"
+                                                    : "rgba(255,255,255,0.85)",
+                                                color: active ? "#fff" : "#475569",
+                                                border: active ? "1px solid rgba(255,255,255,0.3)" : "1px solid rgba(244,182,255,0.4)",
+                                                boxShadow: active ? "0 6px 14px -6px rgba(217,70,239,0.55)" : "none",
+                                            }}
                                         >
                                             {t}
                                         </button>
@@ -626,8 +898,12 @@ export default function ShowcaseFeed() {
                                 })}
                             </div>
                             {tools.includes("其他") && (
-                                <div className="mt-3 bg-blue-50/50 border border-blue-200 rounded-lg p-3">
-                                    <label className="text-xs font-bold text-blue-900 block mb-1.5">
+                                <div className="mt-3 rounded-xl p-3"
+                                     style={{
+                                         background: "linear-gradient(135deg, rgba(253,232,255,0.7), rgba(252,231,243,0.7))",
+                                         border: "1px solid rgba(232,121,249,0.35)",
+                                     }}>
+                                    <label className="text-xs font-black text-fuchsia-700 uppercase tracking-wider block mb-1.5">
                                         請填寫工具名稱（多個請用逗號分隔）
                                     </label>
                                     <input
@@ -635,9 +911,9 @@ export default function ShowcaseFeed() {
                                         value={customTools}
                                         onChange={(e) => setCustomTools(e.target.value)}
                                         placeholder="例如：Perplexity, Notion AI, Suno"
-                                        className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-900 transition-all"
+                                        className="w-full px-3 py-2 text-sm bg-white border border-fuchsia-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-fuchsia-400 transition-all"
                                     />
-                                    <p className="text-[11px] text-slate-500 mt-1.5">
+                                    <p className="text-[11px] text-slate-600 mt-1.5">
                                         填寫的工具名會顯示為標籤，方便其他人搜尋
                                     </p>
                                 </div>
@@ -647,20 +923,27 @@ export default function ShowcaseFeed() {
                         {/* 應用場景（單選） */}
                         <Field label="應用場景" required>
                             <div className="flex flex-wrap gap-2">
-                                {SCENARIOS.map((s) => (
-                                    <button
-                                        type="button"
-                                        key={s}
-                                        onClick={() => setScenario(s)}
-                                        className={`text-xs font-bold px-3 py-1.5 rounded-full border-2 transition-all ${
-                                            scenario === s
-                                                ? "bg-emerald-600 text-white border-emerald-600"
-                                                : "bg-white text-slate-600 border-slate-200 hover:border-emerald-400"
-                                        }`}
-                                    >
-                                        {s}
-                                    </button>
-                                ))}
+                                {SCENARIOS.map((s) => {
+                                    const active = scenario === s;
+                                    return (
+                                        <button
+                                            type="button"
+                                            key={s}
+                                            onClick={() => setScenario(s)}
+                                            className="text-xs font-bold px-3 py-1.5 rounded-full transition-all"
+                                            style={{
+                                                background: active
+                                                    ? "linear-gradient(135deg, #10b981, #0d9488)"
+                                                    : "rgba(255,255,255,0.85)",
+                                                color: active ? "#fff" : "#475569",
+                                                border: active ? "1px solid rgba(255,255,255,0.3)" : "1px solid rgba(167,243,208,0.45)",
+                                                boxShadow: active ? "0 6px 14px -6px rgba(13,148,136,0.55)" : "none",
+                                            }}
+                                        >
+                                            {s}
+                                        </button>
+                                    );
+                                })}
                             </div>
                         </Field>
 
@@ -671,7 +954,7 @@ export default function ShowcaseFeed() {
                                 value={impact}
                                 onChange={(e) => setImpact(e.target.value)}
                                 placeholder="例如：每週節省 5 小時"
-                                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-900 focus:bg-white transition-all"
+                                className="w-full px-4 py-2.5 bg-white/80 border border-fuchsia-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-fuchsia-400 focus:bg-white transition-all text-sm"
                             />
                         </Field>
 
@@ -682,77 +965,93 @@ export default function ShowcaseFeed() {
                                 onChange={(e) => setPromptText(e.target.value)}
                                 placeholder="把你用的 Prompt 貼上來，方便大家學習參考"
                                 rows={4}
-                                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-900 focus:bg-white transition-all font-mono text-sm"
+                                className="w-full px-4 py-2.5 bg-white/80 border border-fuchsia-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-fuchsia-400 focus:bg-white transition-all font-mono text-sm"
                             />
                         </Field>
 
-                        {/* ===== 技術實作（永遠顯示） ===== */}
-                        <div className="border-2 border-dashed border-blue-200 rounded-xl p-4 bg-blue-50/30 space-y-4">
-                            <p className="text-xs font-black text-blue-900 uppercase tracking-wider flex items-center gap-1">
+                        {/* ===== 技術實作 ===== */}
+                        <div className="rounded-2xl p-4 space-y-4"
+                             style={{
+                                 background: "linear-gradient(135deg, rgba(253,232,255,0.5), rgba(252,231,243,0.5))",
+                                 border: "1.5px dashed rgba(217,70,239,0.35)",
+                             }}>
+                            <p className="text-xs font-black uppercase tracking-widest flex items-center gap-1.5"
+                               style={{color: "#9d174d"}}>
                                 <span>🔧</span> 技術實作（選填）
                             </p>
 
-                                <Field label="關鍵邏輯（條列說明流程或邏輯）">
-                                    <textarea
-                                        value={keyLogic}
-                                        onChange={(e) => setKeyLogic(e.target.value)}
-                                        placeholder={"例如：\n1. 觸發：每天早上 9 點\n2. 從 Gmail 抓取未讀信件\n3. 用 GPT 分類並摘要\n4. 寫進 Notion 資料庫"}
-                                        rows={5}
-                                        className="w-full px-4 py-2 bg-white border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-900 transition-all font-mono text-sm"
-                                    />
-                                </Field>
+                            <Field label="關鍵邏輯（條列說明流程或邏輯）">
+                                <textarea
+                                    value={keyLogic}
+                                    onChange={(e) => setKeyLogic(e.target.value)}
+                                    placeholder={"例如：\n1. 觸發：每天早上 9 點\n2. 從 Gmail 抓取未讀信件\n3. 用 GPT 分類並摘要\n4. 寫進 Notion 資料庫"}
+                                    rows={5}
+                                    className="w-full px-4 py-2.5 bg-white border border-fuchsia-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-fuchsia-400 transition-all font-mono text-sm"
+                                />
+                            </Field>
 
-                                <Field label="分享 URL（n8n.cloud / GitHub 連結等）">
+                            <Field label="分享 URL（n8n.cloud / GitHub 連結等）">
+                                <input
+                                    type="url"
+                                    value={resourceUrl}
+                                    onChange={(e) => setResourceUrl(e.target.value)}
+                                    placeholder="https://..."
+                                    className="w-full px-4 py-2.5 bg-white border border-fuchsia-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-fuchsia-400 transition-all text-sm"
+                                />
+                            </Field>
+
+                            <Field label="上傳專案檔案（500 KB 內）">
+                                <p className="text-xs text-slate-600 mb-2 leading-relaxed">
+                                    接受純文字檔：<b>.json</b>（n8n / Make / Zapier workflow）、<b>.md</b>（Claude 系統提示、文件）、<b>.txt</b>（純文字 prompt）、<b>.yaml</b> / <b>.yml</b>（設定檔）
+                                </p>
+                                <div className="rounded-xl p-3 mb-2 text-xs flex items-start gap-2"
+                                     style={{
+                                         background: "linear-gradient(135deg, rgba(254,243,199,0.85), rgba(254,215,170,0.7))",
+                                         border: "1px solid rgba(251,191,36,0.4)",
+                                         color: "#92400e",
+                                     }}>
+                                    <span className="text-base leading-none">⚠️</span>
+                                    <span><b>上傳前請務必移除</b>檔案內所有 API Key、Webhook URL、密碼、Token 等私密資訊，避免外流。</span>
+                                </div>
+                                <div className="relative group">
                                     <input
-                                        type="url"
-                                        value={resourceUrl}
-                                        onChange={(e) => setResourceUrl(e.target.value)}
-                                        placeholder="https://..."
-                                        className="w-full px-4 py-2 bg-white border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-900 transition-all"
+                                        ref={jsonInputRef}
+                                        type="file"
+                                        accept=".json,.md,.txt,.yaml,.yml,application/json,text/markdown,text/plain,text/yaml,application/x-yaml"
+                                        onChange={handleJsonChange}
+                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                                     />
-                                </Field>
-
-                                <Field label="上傳專案檔案（500 KB 內）">
-                                    <p className="text-xs text-slate-500 mb-2 leading-relaxed">
-                                        接受純文字檔：<b>.json</b>（n8n / Make / Zapier workflow）、<b>.md</b>（Claude 系統提示、文件）、<b>.txt</b>（純文字 prompt）、<b>.yaml</b> / <b>.yml</b>（設定檔）
-                                    </p>
-                                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-2 text-xs text-amber-800 flex items-start gap-2">
-                                        <span className="text-base leading-none">⚠️</span>
-                                        <span><b>上傳前請務必移除</b>檔案內所有 API Key、Webhook URL、密碼、Token 等私密資訊，避免外流。</span>
+                                    <div className={`w-full px-4 py-3.5 rounded-xl flex items-center justify-center gap-2 text-sm transition-all border-2 border-dashed ${resourceJsonName ? "border-fuchsia-400 bg-fuchsia-50/70" : "border-fuchsia-200 bg-white group-hover:border-fuchsia-400 group-hover:bg-fuchsia-50/40"}`}>
+                                        <span>{resourceJsonName ? "📎" : "📄"}</span>
+                                        <span className={`font-bold ${resourceJsonName ? "text-fuchsia-700" : "text-slate-500"}`}>
+                                            {resourceJsonName || "點擊選擇檔案（.json / .md / .txt / .yaml / .yml）"}
+                                        </span>
                                     </div>
-                                    <div className="relative group">
-                                        <input
-                                            ref={jsonInputRef}
-                                            type="file"
-                                            accept=".json,.md,.txt,.yaml,.yml,application/json,text/markdown,text/plain,text/yaml,application/x-yaml"
-                                            onChange={handleJsonChange}
-                                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                                        />
-                                        <div className="w-full px-4 py-4 bg-white border-2 border-dashed border-slate-200 rounded-lg group-hover:border-blue-900 transition-all flex items-center justify-center gap-2 text-sm">
-                                            <span>📄</span>
-                                            <span className="text-slate-500">
-                                                {resourceJsonName || "點擊選擇檔案（.json / .md / .txt / .yaml / .yml）"}
-                                            </span>
-                                        </div>
-                                    </div>
+                                </div>
                             </Field>
                         </div>
 
                         {/* 操作按鈕 */}
-                        <div className="flex gap-2 justify-end pt-2 border-t border-slate-100">
+                        <div className="flex gap-2 justify-end pt-3 border-t border-fuchsia-100/60">
                             <button
                                 type="button"
                                 onClick={() => { resetForm(); setShowUpload(false); }}
-                                className="px-4 py-2 text-sm font-bold text-slate-500 hover:text-slate-700"
+                                className="px-4 py-2.5 text-sm font-bold text-slate-500 hover:text-slate-700 rounded-xl transition-all"
                             >
                                 取消
                             </button>
                             <button
                                 type="submit"
                                 disabled={submitting}
-                                className="px-5 py-2 bg-blue-900 text-white rounded-lg font-bold text-sm shadow-md hover:bg-blue-800 disabled:bg-slate-300 disabled:cursor-not-allowed transition-all"
+                                className="px-6 py-2.5 text-white rounded-xl font-black text-sm transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
+                                style={{
+                                    background: submitting
+                                        ? "linear-gradient(135deg, #94a3b8, #64748b)"
+                                        : "linear-gradient(135deg, #ec4899 0%, #d946ef 50%, #a855f7 100%)",
+                                    boxShadow: submitting ? "none" : "0 12px 26px -8px rgba(217,70,239,0.55), inset 0 1px 0 rgba(255,255,255,0.25)",
+                                }}
                             >
-                                {submitting ? (submitStage || "處理中...") : "發布"}
+                                {submitting ? (<><span className="animate-spin">↻</span>{submitStage || "處理中..."}</>) : (<><span>✨</span>發布</>)}
                             </button>
                         </div>
                     </form>
@@ -760,12 +1059,24 @@ export default function ShowcaseFeed() {
 
                 {/* ===== 貼文列表 ===== */}
                 {loading ? (
-                    <div className="text-center text-slate-400 py-16 animate-pulse">載入中...</div>
+                    <div className="text-center text-slate-500 py-16">
+                        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full"
+                             style={{background: "rgba(255,255,255,0.7)", border: "1px solid rgba(244,182,255,0.4)"}}>
+                            <span className="animate-spin">↻</span>
+                            <span className="font-bold text-sm">載入中...</span>
+                        </div>
+                    </div>
                 ) : posts.length === 0 ? (
-                    <div className="text-center text-slate-400 py-16 bg-white rounded-2xl border border-slate-200">
-                        <p className="text-4xl mb-3">📭</p>
-                        <p className="font-semibold">還沒有任何成果分享</p>
-                        <p className="text-sm mt-1">成為第一個分享的人吧！</p>
+                    <div className="text-center py-16 rounded-3xl"
+                         style={{
+                             background: "rgba(255,255,255,0.72)",
+                             backdropFilter: "blur(20px)",
+                             border: "1px solid rgba(255,255,255,0.95)",
+                             boxShadow: "0 12px 32px -12px rgba(131,24,67,0.14)",
+                         }}>
+                        <p className="text-5xl mb-3">📭</p>
+                        <p className="font-black text-slate-800">還沒有任何成果分享</p>
+                        <p className="text-sm text-slate-500 mt-1">成為第一個分享的人吧！</p>
                     </div>
                 ) : (
                     <div className="space-y-6">
@@ -775,122 +1086,245 @@ export default function ShowcaseFeed() {
                             const comments = commentsByPost[post.id] || [];
                             const hasDetail = !!(post.promptText || post.keyLogic || post.resourceUrl || post.resourceJson);
                             const detailOpen = !!openDetails[post.id];
+                            const isTopSharer = post.authorEmail === topSharerEmail;
 
                             return (
-                                <article key={post.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                                    {/* 作者列 */}
-                                    <header className="p-4 flex items-center justify-between">
-                                        <div className="flex items-center gap-3">
-                                            {post.authorPhoto ? (
-                                                /* eslint-disable-next-line @next/next/no-img-element */
-                                                <img src={post.authorPhoto} alt="" className="w-9 h-9 rounded-full" />
-                                            ) : (
-                                                <div className="w-9 h-9 rounded-full bg-slate-300 text-white flex items-center justify-center font-bold">
-                                                    {(post.authorName || "?")[0]}
+                                <article key={post.id}
+                                         className="rounded-3xl overflow-hidden transition-all duration-300 hover:-translate-y-0.5"
+                                         style={{
+                                             background: "rgba(255,255,255,0.82)",
+                                             backdropFilter: "blur(20px) saturate(180%)",
+                                             border: isTopSharer ? "1.5px solid rgba(252,211,77,0.45)" : "1px solid rgba(255,255,255,0.95)",
+                                             boxShadow: "0 16px 36px -14px rgba(131,24,67,0.15), inset 0 1px 0 rgba(255,255,255,0.95)",
+                                         }}>
+                                    {/* === 大圖（最上方）+ 浮動作者徽章 + 浮動編號 === */}
+                                    <div className="relative overflow-hidden">
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img src={post.imageUrl} alt={post.caption} className="w-full"
+                                             style={{background: "linear-gradient(135deg, #fdf2f8, #fae8ff)"}} />
+
+                                        {/* 漸層遮罩，讓徽章看起來更立體 */}
+                                        <div className="absolute inset-x-0 top-0 h-20 pointer-events-none"
+                                             style={{background: "linear-gradient(180deg, rgba(0,0,0,0.25), transparent)"}} />
+
+                                        {/* 左上：作者徽章 + 成效 chip 水平並排 */}
+                                        <div className="absolute top-3 left-3 right-14 flex items-start gap-2 flex-wrap">
+                                            {/* 作者徽章 */}
+                                            <div className="flex items-center gap-2 px-2 py-1.5 rounded-full"
+                                                 style={{
+                                                     background: "rgba(255,255,255,0.85)",
+                                                     backdropFilter: "blur(12px)",
+                                                     border: isTopSharer ? "1.5px solid rgba(252,211,77,0.65)" : "1px solid rgba(255,255,255,0.95)",
+                                                     boxShadow: "0 4px 12px -4px rgba(131,24,67,0.25)",
+                                                 }}>
+                                                <div className="relative shrink-0">
+                                                    {post.authorPhoto ? (
+                                                        /* eslint-disable-next-line @next/next/no-img-element */
+                                                        <img src={post.authorPhoto} alt="" className="w-6 h-6 rounded-full" />
+                                                    ) : (
+                                                        <div className="w-6 h-6 rounded-full flex items-center justify-center font-black text-white text-[10px]"
+                                                             style={{background: "linear-gradient(135deg, #ec4899, #d946ef, #a855f7)"}}>
+                                                            {(post.authorName || "?")[0]}
+                                                        </div>
+                                                    )}
+                                                    {isTopSharer && (
+                                                        <span className="absolute -top-1.5 -right-1.5 text-[10px] leading-none"
+                                                              style={{filter: "drop-shadow(0 0 3px rgba(252,211,77,0.8))"}}>👑</span>
+                                                    )}
+                                                </div>
+                                                <span className="text-[11px] font-black text-slate-900 max-w-[120px] truncate">{post.authorName}</span>
+                                                <span className="text-[10px] text-slate-500 font-bold">· {formatTime(post.createdAt)}</span>
+                                            </div>
+
+                                            {/* 成效膠囊（跟作者徽章並排） */}
+                                            {post.impact && (
+                                                <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full max-w-full"
+                                                     title={post.impact}
+                                                     style={{
+                                                         background: "linear-gradient(135deg, rgba(254,243,199,0.96), rgba(254,215,170,0.96))",
+                                                         border: "1.5px solid rgba(251,191,36,0.7)",
+                                                         color: "#92400e",
+                                                         backdropFilter: "blur(10px)",
+                                                         boxShadow: "0 6px 16px -6px rgba(245,158,11,0.55), inset 0 1px 0 rgba(255,255,255,0.5)",
+                                                     }}>
+                                                    <span className="w-5 h-5 rounded-full flex items-center justify-center text-[11px] shrink-0"
+                                                          style={{
+                                                              background: "linear-gradient(135deg, #f59e0b, #ea580c)",
+                                                              color: "#fff",
+                                                              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.35)",
+                                                          }}>⚡</span>
+                                                    <span className="text-[10px] font-black uppercase tracking-widest shrink-0" style={{color: "#b45309"}}>成效</span>
+                                                    <span className="text-[11px] font-black truncate">{post.impact}</span>
                                                 </div>
                                             )}
-                                            <div>
-                                                <p className="text-sm font-bold text-slate-800 flex items-center gap-1">
-                                                    {post.authorEmail === topSharerEmail && (
-                                                        <span
-                                                            title="分享之王"
-                                                            className="text-base leading-none drop-shadow-[0_0_4px_rgba(250,204,21,0.6)]"
-                                                        >
-                                                            👑
-                                                        </span>
-                                                    )}
-                                                    {post.authorName}
-                                                </p>
-                                                <p className="text-xs text-slate-400">{formatTime(post.createdAt)}</p>
-                                            </div>
                                         </div>
+
+                                        {/* 右上：刪除按鈕（只有自己的貼文才有） */}
                                         {isMine && (
                                             <button
                                                 onClick={() => handleDelete(post)}
-                                                className="text-xs text-slate-400 hover:text-red-500 font-bold"
+                                                className="absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center text-sm font-black transition-all"
+                                                style={{
+                                                    background: "rgba(255,255,255,0.85)",
+                                                    backdropFilter: "blur(12px)",
+                                                    border: "1px solid rgba(255,255,255,0.95)",
+                                                    color: "#64748b",
+                                                    boxShadow: "0 4px 12px -4px rgba(131,24,67,0.25)",
+                                                }}
+                                                title="刪除"
                                             >
-                                                刪除
+                                                ✕
                                             </button>
                                         )}
-                                    </header>
-
-                                    {/* 圖片 */}
-                                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                                    <img src={post.imageUrl} alt={post.caption} className="w-full bg-slate-100" />
-
-                                    {/* 標題 */}
-                                    {post.caption && (
-                                        <h3 className="px-4 pt-4 text-base font-black text-slate-800">{post.caption}</h3>
-                                    )}
-
-                                    {/* 標籤列：場景 + 工具 */}
-                                    <div className="px-4 pt-2 flex flex-wrap gap-1.5">
-                                        {post.scenario && (
-                                            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
-                                                #{post.scenario}
-                                            </span>
-                                        )}
-                                        {post.tools?.map((t) => (
-                                            <span key={t} className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-200">
-                                                {t}
-                                            </span>
-                                        ))}
                                     </div>
 
-                                    {/* 成效（醒目區塊） */}
-                                    {post.impact && (
-                                        <div className="mx-4 mt-3 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-lg px-3 py-2 flex items-center gap-2">
-                                            <span className="text-lg">⚡</span>
-                                            <span className="text-sm font-bold text-amber-900">{post.impact}</span>
+                                    {/* === 標題區 === */}
+                                    {post.caption && (
+                                        <div className="px-5 pt-4">
+                                            <h3 className="text-lg md:text-xl font-black text-slate-900 leading-snug">{post.caption}</h3>
                                         </div>
                                     )}
 
-                                    {/* 互動列 */}
-                                    <div className="px-4 mt-3 pb-2 flex items-center gap-4 flex-wrap">
+                                    {/* === 標籤雲（場景 + 工具） === */}
+                                    {(post.scenario || (post.tools?.length || 0) > 0) && (
+                                        <div className="px-5 pt-3 flex flex-wrap items-center gap-1.5">
+                                            {post.scenario && (
+                                                <span className="text-[11px] font-black px-2.5 py-1 rounded-full inline-flex items-center gap-1"
+                                                      style={{
+                                                          background: "linear-gradient(135deg, rgba(209,250,229,0.95), rgba(204,251,241,0.95))",
+                                                          color: "#065f46",
+                                                          border: "1px solid rgba(110,231,183,0.55)",
+                                                      }}>
+                                                    <span>📂</span>{post.scenario}
+                                                </span>
+                                            )}
+                                            {post.tools?.slice(0, 5).map((t) => (
+                                                <span key={t} className="text-[11px] font-black px-2.5 py-1 rounded-full"
+                                                      style={{
+                                                          background: "linear-gradient(135deg, rgba(253,232,255,0.95), rgba(252,231,243,0.95))",
+                                                          color: "#86198f",
+                                                          border: "1px solid rgba(232,121,249,0.45)",
+                                                      }}>
+                                                    {t}
+                                                </span>
+                                            ))}
+                                            {(post.tools?.length || 0) > 5 && (
+                                                <span className="text-[10px] font-black text-slate-500 px-2 py-1">
+                                                    +{(post.tools?.length || 0) - 5} 個工具
+                                                </span>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* === Mini Stats Bar：互動數字一覽 === */}
+                                    <div className="px-5 pt-3 flex items-center gap-3 text-[11px] font-bold text-slate-500">
+                                        <span className="inline-flex items-center gap-1">
+                                            <span>❤️</span>
+                                            <span className="text-slate-700 font-black">{post.likes || 0}</span>
+                                            <span className="text-slate-400">愛心</span>
+                                        </span>
+                                        <span className="text-slate-300">·</span>
+                                        <span className="inline-flex items-center gap-1">
+                                            <span>💬</span>
+                                            <span className="text-slate-700 font-black">{comments.length}</span>
+                                            <span className="text-slate-400">留言</span>
+                                        </span>
+                                        {hasDetail && (
+                                            <>
+                                                <span className="text-slate-300">·</span>
+                                                <span className="inline-flex items-center gap-1 text-fuchsia-600">
+                                                    <span>📦</span>
+                                                    <span className="font-black">含實作</span>
+                                                </span>
+                                            </>
+                                        )}
+                                    </div>
+
+                                    {/* === 互動按鈕列 === */}
+                                    <div className="px-5 mt-3 pb-3 flex items-center gap-2 flex-wrap">
                                         <button
                                             onClick={() => toggleLike(post)}
-                                            className={`flex items-center gap-1 text-sm font-bold transition-colors ${liked ? "text-red-500" : "text-slate-500 hover:text-red-500"}`}
+                                            className="flex items-center gap-1.5 text-sm font-black transition-all px-3.5 py-2 rounded-xl active:scale-[0.97]"
+                                            style={{
+                                                background: liked
+                                                    ? "linear-gradient(135deg, #fb7185, #ec4899)"
+                                                    : "rgba(255,255,255,0.7)",
+                                                color: liked ? "#fff" : "#64748b",
+                                                border: liked ? "1px solid rgba(255,255,255,0.3)" : "1px solid rgba(244,182,255,0.4)",
+                                                boxShadow: liked ? "0 8px 18px -6px rgba(244,63,94,0.5)" : "none",
+                                            }}
                                         >
-                                            <span className="text-xl">{liked ? "❤️" : "🤍"}</span>
-                                            <span>{post.likes || 0}</span>
+                                            <span className="text-base">{liked ? "❤️" : "🤍"}</span>
+                                            <span>{liked ? "已愛心" : "給愛心"}</span>
                                         </button>
                                         <button
                                             onClick={() => toggleComments(post.id)}
-                                            className="flex items-center gap-1 text-sm font-bold text-slate-500 hover:text-blue-900"
+                                            className="flex items-center gap-1.5 text-sm font-black transition-all px-3.5 py-2 rounded-xl active:scale-[0.97]"
+                                            style={{
+                                                background: openComments[post.id]
+                                                    ? "linear-gradient(135deg, #a855f7, #7c3aed)"
+                                                    : "rgba(255,255,255,0.7)",
+                                                color: openComments[post.id] ? "#fff" : "#64748b",
+                                                border: openComments[post.id] ? "1px solid rgba(255,255,255,0.3)" : "1px solid rgba(244,182,255,0.4)",
+                                                boxShadow: openComments[post.id] ? "0 8px 18px -6px rgba(168,85,247,0.5)" : "none",
+                                            }}
                                         >
-                                            <span className="text-xl">💬</span>
-                                            <span>{openComments[post.id] ? "收起" : "留言"}</span>
+                                            <span className="text-base">💬</span>
+                                            <span>{openComments[post.id] ? "收起留言" : "留言"}</span>
                                         </button>
                                         {hasDetail && (
                                             <button
                                                 onClick={() => setOpenDetails((p) => ({ ...p, [post.id]: !detailOpen }))}
-                                                className="ml-auto flex items-center gap-1 text-xs font-bold py-1.5 px-3 bg-blue-50 text-blue-700 rounded-full border border-blue-200 hover:bg-blue-100 transition-all"
+                                                className="ml-auto flex items-center gap-1.5 text-xs font-black py-2 px-3.5 rounded-xl transition-all active:scale-[0.97]"
+                                                style={{
+                                                    background: detailOpen
+                                                        ? "linear-gradient(135deg, #ec4899, #d946ef)"
+                                                        : "rgba(253,232,255,0.85)",
+                                                    color: detailOpen ? "#fff" : "#86198f",
+                                                    border: detailOpen ? "1px solid rgba(255,255,255,0.3)" : "1px solid rgba(232,121,249,0.45)",
+                                                    boxShadow: detailOpen ? "0 8px 18px -6px rgba(217,70,239,0.5)" : "none",
+                                                }}
                                             >
                                                 <span>{detailOpen ? "▲" : "▼"}</span>
-                                                {detailOpen ? "收起詳情" : "查看詳情"}
+                                                {detailOpen ? "收起詳情" : "查看實作"}
                                             </button>
                                         )}
                                     </div>
 
                                     {/* ===== 詳情展開區 ===== */}
                                     {detailOpen && hasDetail && (
-                                        <div className="border-t border-slate-100 mt-2 px-4 py-4 bg-slate-50/50 space-y-4">
+                                        <div className="px-5 py-5 space-y-4"
+                                             style={{
+                                                 background: "linear-gradient(135deg, rgba(253,232,255,0.45), rgba(243,232,255,0.45))",
+                                                 borderTop: "1px solid rgba(232,121,249,0.25)",
+                                             }}>
                                             {/* Prompt */}
                                             {post.promptText && (
                                                 <div>
                                                     <div className="flex items-center justify-between mb-2">
-                                                        <span className="text-xs font-black uppercase tracking-wider text-blue-700">💡 使用的 Prompt</span>
+                                                        <span className="text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5"
+                                                              style={{color: "#86198f"}}>
+                                                            <span className="w-5 h-5 rounded-md flex items-center justify-center text-white"
+                                                                  style={{background: "linear-gradient(135deg, #ec4899, #d946ef)"}}>💡</span>
+                                                            使用的 Prompt
+                                                        </span>
                                                         <button
                                                             onClick={() => {
                                                                 navigator.clipboard.writeText(post.promptText);
                                                                 showToast("success", "Prompt 已複製");
                                                             }}
-                                                            className="text-xs font-bold py-1 px-2 bg-white border border-blue-900 text-blue-900 rounded hover:bg-blue-900 hover:text-white transition-all"
+                                                            className="text-[11px] font-black py-1 px-2.5 rounded-lg transition-all"
+                                                            style={{
+                                                                background: "rgba(255,255,255,0.95)",
+                                                                color: "#86198f",
+                                                                border: "1px solid rgba(232,121,249,0.45)",
+                                                            }}
                                                         >
                                                             📋 一鍵複製
                                                         </button>
                                                     </div>
-                                                    <pre className="text-xs text-slate-700 bg-white border border-slate-200 rounded-lg p-3 whitespace-pre-wrap font-mono leading-relaxed max-h-60 overflow-auto">
+                                                    <pre className="text-xs text-slate-800 rounded-xl p-3.5 whitespace-pre-wrap font-mono leading-relaxed max-h-60 overflow-auto"
+                                                         style={{background: "rgba(255,255,255,0.9)", border: "1px solid rgba(232,121,249,0.25)"}}>
 {post.promptText}
                                                     </pre>
                                                 </div>
@@ -899,8 +1333,14 @@ export default function ShowcaseFeed() {
                                             {/* 關鍵邏輯 */}
                                             {post.keyLogic && (
                                                 <div>
-                                                    <p className="text-xs font-black uppercase tracking-wider text-blue-700 mb-2">🔧 關鍵邏輯</p>
-                                                    <pre className="text-xs text-slate-700 bg-white border border-slate-200 rounded-lg p-3 whitespace-pre-wrap font-sans leading-relaxed">
+                                                    <p className="text-[10px] font-black uppercase tracking-widest mb-2 flex items-center gap-1.5"
+                                                       style={{color: "#86198f"}}>
+                                                        <span className="w-5 h-5 rounded-md flex items-center justify-center text-white"
+                                                              style={{background: "linear-gradient(135deg, #d946ef, #a855f7)"}}>🔧</span>
+                                                        關鍵邏輯
+                                                    </p>
+                                                    <pre className="text-xs text-slate-800 rounded-xl p-3.5 whitespace-pre-wrap font-sans leading-relaxed"
+                                                         style={{background: "rgba(255,255,255,0.9)", border: "1px solid rgba(232,121,249,0.25)"}}>
 {post.keyLogic}
                                                     </pre>
                                                 </div>
@@ -909,14 +1349,24 @@ export default function ShowcaseFeed() {
                                             {/* 資源連結 */}
                                             {(post.resourceUrl || post.resourceJson) && (
                                                 <div>
-                                                    <p className="text-xs font-black uppercase tracking-wider text-blue-700 mb-2">📦 資源</p>
+                                                    <p className="text-[10px] font-black uppercase tracking-widest mb-2 flex items-center gap-1.5"
+                                                       style={{color: "#86198f"}}>
+                                                        <span className="w-5 h-5 rounded-md flex items-center justify-center text-white"
+                                                              style={{background: "linear-gradient(135deg, #a855f7, #7c3aed)"}}>📦</span>
+                                                        資源
+                                                    </p>
                                                     <div className="flex flex-wrap gap-2">
                                                         {post.resourceUrl && (
                                                             <a
                                                                 href={post.resourceUrl}
                                                                 target="_blank"
                                                                 rel="noopener noreferrer"
-                                                                className="text-xs font-bold py-2 px-3 bg-white border border-blue-900 text-blue-900 rounded-lg hover:bg-blue-900 hover:text-white transition-all flex items-center gap-1"
+                                                                className="text-xs font-black py-2 px-3 rounded-xl transition-all flex items-center gap-1.5"
+                                                                style={{
+                                                                    background: "rgba(255,255,255,0.95)",
+                                                                    color: "#86198f",
+                                                                    border: "1px solid rgba(232,121,249,0.45)",
+                                                                }}
                                                             >
                                                                 🔗 開啟連結
                                                             </a>
@@ -924,7 +1374,13 @@ export default function ShowcaseFeed() {
                                                         {post.resourceJson && (
                                                             <button
                                                                 onClick={() => downloadJson(post.resourceJson, post.resourceJsonName)}
-                                                                className="text-xs font-bold py-2 px-3 bg-white border border-blue-900 text-blue-900 rounded-lg hover:bg-blue-900 hover:text-white transition-all flex items-center gap-1"
+                                                                className="text-xs font-black py-2 px-3 rounded-xl transition-all flex items-center gap-1.5"
+                                                                style={{
+                                                                    background: "linear-gradient(135deg, #ec4899, #d946ef)",
+                                                                    color: "#fff",
+                                                                    border: "1px solid rgba(255,255,255,0.3)",
+                                                                    boxShadow: "0 6px 14px -6px rgba(217,70,239,0.5)",
+                                                                }}
                                                             >
                                                                 ⬇️ 下載 {post.resourceJsonName || "resource.txt"}
                                                             </button>
@@ -937,38 +1393,47 @@ export default function ShowcaseFeed() {
 
                                     {/* ===== 留言區 ===== */}
                                     {openComments[post.id] && (
-                                        <div className="border-t border-slate-100 px-4 py-3 bg-slate-50/50 space-y-3">
+                                        <div className="px-5 py-4 space-y-3"
+                                             style={{
+                                                 background: "linear-gradient(135deg, rgba(243,232,255,0.4), rgba(252,231,243,0.4))",
+                                                 borderTop: "1px solid rgba(232,121,249,0.25)",
+                                             }}>
                                             {comments.length === 0 ? (
-                                                <p className="text-xs text-slate-400 italic text-center py-2">還沒有留言</p>
+                                                <p className="text-xs text-slate-500 italic text-center py-2">還沒有留言 · 來說點什麼吧</p>
                                             ) : (
                                                 comments.map((c) => (
-                                                    <div key={c.id} className="text-sm">
-                                                        <span className="font-bold text-slate-700 mr-2">{c.authorName}</span>
-                                                        <span className="text-slate-700">{c.text}</span>
-                                                        <p className="text-[10px] text-slate-400 mt-0.5">{formatTime(c.createdAt)}</p>
+                                                    <div key={c.id} className="rounded-xl px-3 py-2"
+                                                         style={{background: "rgba(255,255,255,0.85)", border: "1px solid rgba(232,121,249,0.18)"}}>
+                                                        <div className="flex items-baseline gap-2">
+                                                            <span className="font-black text-slate-900 text-sm">{c.authorName}</span>
+                                                            <span className="text-[10px] text-slate-400">{formatTime(c.createdAt)}</span>
+                                                        </div>
+                                                        <p className="text-sm text-slate-700 leading-relaxed mt-0.5">{c.text}</p>
                                                     </div>
                                                 ))
                                             )}
-                                            <div className="flex gap-2 pt-2">
+                                            <div className="flex gap-2 pt-1">
                                                 <input
                                                     type="text"
                                                     value={commentDrafts[post.id] || ""}
                                                     onChange={(e) => setCommentDrafts((p) => ({ ...p, [post.id]: e.target.value }))}
                                                     onKeyDown={(e) => { if (e.key === "Enter") submitComment(post.id); }}
                                                     placeholder="新增留言..."
-                                                    className="flex-1 px-3 py-1.5 text-sm bg-white border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-900"
+                                                    className="flex-1 px-3.5 py-2 text-sm bg-white border border-fuchsia-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-fuchsia-400 transition-all"
                                                 />
                                                 <button
                                                     onClick={() => submitComment(post.id)}
-                                                    className="px-3 py-1.5 bg-blue-900 text-white text-xs font-bold rounded-md hover:bg-blue-800"
+                                                    className="px-4 py-2 text-white text-xs font-black rounded-xl transition-all active:scale-[0.98]"
+                                                    style={{
+                                                        background: "linear-gradient(135deg, #ec4899, #d946ef)",
+                                                        boxShadow: "0 8px 18px -6px rgba(217,70,239,0.5)",
+                                                    }}
                                                 >
                                                     送出
                                                 </button>
                                             </div>
                                         </div>
                                     )}
-
-                                    <div className="h-3" />
                                 </article>
                             );
                         })}
@@ -978,10 +1443,40 @@ export default function ShowcaseFeed() {
 
             {/* Toast */}
             {toast && (
-                <div className={`fixed bottom-6 right-6 p-4 rounded-md text-sm font-medium shadow-lg z-50 ${toast.type === "success" ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-700 border border-red-200"}`}>
-                    {toast.text}
+                <div className={`fixed bottom-6 right-6 px-4 py-3 rounded-2xl text-sm font-bold shadow-xl z-50 flex items-center gap-2`}
+                     style={{
+                         background: toast.type === "success"
+                             ? "linear-gradient(135deg, #10b981, #0d9488)"
+                             : "linear-gradient(135deg, #f43f5e, #ec4899)",
+                         color: "#fff",
+                         boxShadow: toast.type === "success"
+                             ? "0 16px 32px -10px rgba(13,148,136,0.55)"
+                             : "0 16px 32px -10px rgba(244,63,94,0.55)",
+                         border: "1px solid rgba(255,255,255,0.3)",
+                     }}>
+                    <span>{toast.type === "success" ? "✓" : "⚠"}</span>
+                    <span>{toast.text}</span>
                 </div>
             )}
+
+            <style jsx>{`
+                @keyframes showcasePulse {
+                    0%, 100% { opacity: 0.7; transform: scale(1); }
+                    50% { opacity: 1; transform: scale(1.5); box-shadow: 0 0 12px currentColor; }
+                }
+                @keyframes dashGlowA {
+                    0%, 100% { opacity: 0.65; transform: translate(0,0) scale(1); }
+                    50% { opacity: 1; transform: translate(12px,-8px) scale(1.08); }
+                }
+                @keyframes dashGlowB {
+                    0%, 100% { opacity: 0.65; transform: translate(0,0) scale(1); }
+                    50% { opacity: 1; transform: translate(-10px,6px) scale(1.1); }
+                }
+                @keyframes crownFloat {
+                    0%, 100% { transform: rotate(12deg) translateY(0); }
+                    50% { transform: rotate(18deg) translateY(-6px); }
+                }
+            `}</style>
         </div>
     );
 }
@@ -990,11 +1485,176 @@ export default function ShowcaseFeed() {
 function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
     return (
         <div>
-            <label className="text-sm font-semibold text-slate-700 block mb-2">
+            <label className="text-xs font-bold text-slate-700 block mb-2 uppercase tracking-wider">
                 {label}
-                {required && <span className="text-red-500 ml-1">*</span>}
+                {required && <span className="text-rose-500 ml-1">*</span>}
             </label>
             {children}
+        </div>
+    );
+}
+
+// 浮動裝飾
+function ShowcaseDecor() {
+    return (
+        <>
+            <div className="absolute top-24 left-[8%] w-2 h-2 bg-fuchsia-400 rounded-full" style={{animation: "showFloat 5s ease-in-out infinite"}} />
+            <div className="absolute top-44 right-[14%] w-1.5 h-1.5 bg-pink-400 rounded-full" style={{animation: "showFloat 5s ease-in-out infinite 1.3s"}} />
+            <div className="absolute bottom-44 left-[18%] w-2 h-2 bg-purple-400 rounded-full" style={{animation: "showFloat 5s ease-in-out infinite 2.4s"}} />
+            <div className="absolute top-1/2 right-[6%] w-3 h-3 bg-rose-300 rounded-full" style={{animation: "showFloat 5s ease-in-out infinite 0.6s"}} />
+            <svg className="absolute top-10 right-14 w-32 h-32 opacity-25 pointer-events-none" viewBox="0 0 200 200" fill="none" style={{color: "#ec4899", animation: "showSpin 22s linear infinite"}}>
+                <circle cx="100" cy="100" r="60" stroke="currentColor" strokeWidth="2" strokeDasharray="4 6"/>
+                <circle cx="100" cy="100" r="90" stroke="currentColor" strokeWidth="1" strokeDasharray="2 8"/>
+                <path d="M100 60 L115 95 L150 100 L120 120 L130 155 L100 135 L70 155 L80 120 L50 100 L85 95 Z" fill="currentColor" opacity="0.5"/>
+            </svg>
+            <svg className="absolute bottom-20 left-10 w-24 h-24 opacity-20 pointer-events-none" viewBox="0 0 200 200" style={{color: "#d946ef", animation: "showBob 7s ease-in-out infinite"}}>
+                <circle cx="60" cy="60" r="22" fill="currentColor"/>
+                <circle cx="140" cy="60" r="22" fill="currentColor"/>
+                <circle cx="100" cy="140" r="22" fill="currentColor"/>
+            </svg>
+            <style jsx>{`
+                @keyframes showFloat {
+                    0%, 100% { opacity: 0.55; transform: translateY(0) scale(1); }
+                    50% { opacity: 1; transform: translateY(-10px) scale(1.3); }
+                }
+                @keyframes showSpin {
+                    0% { transform: rotate(0deg); }
+                    100% { transform: rotate(360deg); }
+                }
+                @keyframes showBob {
+                    0%, 100% { transform: translateY(0); }
+                    50% { transform: translateY(-12px); }
+                }
+            `}</style>
+        </>
+    );
+}
+
+// ===== 動畫工具元件 =====
+
+// 數字遞增動畫（ease-out 緩動）
+function AnimatedNumber({ value, duration = 1200, suffix = "" }: { value: number; duration?: number; suffix?: string }) {
+    const [display, setDisplay] = useState(0);
+    const rafRef = useRef<number | null>(null);
+    const startRef = useRef<number | null>(null);
+    const fromRef = useRef(0);
+
+    useEffect(() => {
+        const from = fromRef.current;
+        const to = value;
+        startRef.current = null;
+
+        const tick = (t: number) => {
+            if (startRef.current === null) startRef.current = t;
+            const elapsed = t - startRef.current;
+            const progress = Math.min(elapsed / duration, 1);
+            const eased = 1 - Math.pow(1 - progress, 3); // easeOutCubic
+            const current = from + (to - from) * eased;
+            setDisplay(current);
+            if (progress < 1) {
+                rafRef.current = requestAnimationFrame(tick);
+            } else {
+                fromRef.current = to;
+            }
+        };
+        rafRef.current = requestAnimationFrame(tick);
+        return () => {
+            if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+        };
+    }, [value, duration]);
+
+    return <>{Math.round(display).toLocaleString()}{suffix}</>;
+}
+
+// 環形圖（donut chart）— SVG 純手刻，配合線段繞行動畫
+function DonutChart({
+    data,
+    size = 180,
+    thickness = 22,
+    centerLabel,
+    centerSubLabel,
+}: {
+    data: { label: string; value: number; color: string }[];
+    size?: number;
+    thickness?: number;
+    centerLabel?: string;
+    centerSubLabel?: string;
+}) {
+    const total = data.reduce((s, d) => s + d.value, 0) || 1;
+    const radius = (size - thickness) / 2;
+    const circumference = 2 * Math.PI * radius;
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => {
+        const id = requestAnimationFrame(() => setMounted(true));
+        return () => cancelAnimationFrame(id);
+    }, []);
+
+    const segments = data.reduce<{ list: Array<{ label: string; value: number; color: string; dash: number; gap: number; offset: number; fraction: number; idx: number }>; cumulative: number }>((acc, d, i) => {
+        const fraction = d.value / total;
+        const dash = circumference * fraction;
+        const gap = circumference - dash;
+        const offset = -acc.cumulative * circumference;
+        acc.list.push({ ...d, dash, gap, offset, fraction, idx: i });
+        return { list: acc.list, cumulative: acc.cumulative + fraction };
+    }, { list: [], cumulative: 0 }).list;
+
+    return (
+        <div className="relative inline-flex" style={{width: size, height: size}}>
+            <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90">
+                {/* 底圈 */}
+                <circle
+                    cx={size / 2}
+                    cy={size / 2}
+                    r={radius}
+                    fill="none"
+                    stroke="rgba(244,182,255,0.18)"
+                    strokeWidth={thickness}
+                />
+                {segments.map((seg, i) => (
+                    <circle
+                        key={i}
+                        cx={size / 2}
+                        cy={size / 2}
+                        r={radius}
+                        fill="none"
+                        stroke={seg.color}
+                        strokeWidth={thickness}
+                        strokeLinecap="round"
+                        strokeDasharray={mounted ? `${seg.dash} ${seg.gap}` : `0 ${circumference}`}
+                        strokeDashoffset={seg.offset}
+                        style={{
+                            transition: `stroke-dasharray 900ms cubic-bezier(0.22, 1, 0.36, 1) ${i * 120}ms`,
+                        }}
+                    />
+                ))}
+            </svg>
+            {/* 中央標籤 */}
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                {centerLabel && <div className="text-2xl font-black text-slate-900 leading-none">{centerLabel}</div>}
+                {centerSubLabel && <div className="text-[10px] font-bold text-slate-500 mt-1 uppercase tracking-widest">{centerSubLabel}</div>}
+            </div>
+        </div>
+    );
+}
+
+// 條狀圖：從 0 跑到 width%（用 transition 過渡）
+function AnimatedBar({ widthPct, gradient, delay = 0 }: { widthPct: number; gradient: string; delay?: number }) {
+    const [w, setW] = useState(0);
+    useEffect(() => {
+        const t = setTimeout(() => setW(widthPct), 100 + delay);
+        return () => clearTimeout(t);
+    }, [widthPct, delay]);
+    return (
+        <div className="h-2 rounded-full overflow-hidden" style={{background: "rgba(244,182,255,0.18)"}}>
+            <div
+                className="h-full rounded-full"
+                style={{
+                    width: `${w}%`,
+                    background: gradient,
+                    transition: "width 1100ms cubic-bezier(0.22, 1, 0.36, 1)",
+                }}
+            />
         </div>
     );
 }
