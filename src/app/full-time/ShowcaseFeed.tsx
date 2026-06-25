@@ -21,18 +21,52 @@ import { uploadImageToCloudinary } from "@/lib/cloudinary";
 import { compressImage } from "@/lib/imageCompress";
 
 // ===== 預設選項 =====
-const AI_TOOLS = [
-    "n8n", "Make.com", "Zapier",
-    "ChatGPT", "GPT-4o", "GPT-5",
-    "Claude", "Claude 3.5", "Claude 4",
-    "Gemini", "Midjourney", "DALL·E",
-    "Cursor", "v0", "其他",
+
+// AI 工具分組（MECE：每個工具品牌只出現一次）
+const AI_TOOL_GROUPS = [
+    {
+        group: "🔄 自動化整合",
+        tools: ["n8n", "Make.com", "Zapier"],
+    },
+    {
+        group: "💬 AI 語言模型",
+        tools: ["ChatGPT", "Claude", "Gemini", "Grok", "Microsoft Copilot", "Perplexity"],
+    },
+    {
+        group: "🎨 圖像生成",
+        tools: ["Midjourney", "DALL·E", "Stable Diffusion", "Ideogram"],
+    },
+    {
+        group: "💻 程式開發",
+        tools: ["Cursor", "GitHub Copilot", "v0", "Bolt.new", "Codex", "Claude Code"],
+    },
+    {
+        group: "✨ 其他工具",
+        tools: ["Notion AI", "ElevenLabs", "Suno", "Runway", "其他"],
+    },
 ];
 
+// 平鋪版（供其他邏輯使用）
+const AI_TOOLS = AI_TOOL_GROUPS.flatMap((g) => g.tools);
+
 const SCENARIOS = [
-    "行政自動化", "資料分析", "文案生成",
-    "教學設計", "客戶服務", "資料整理",
-    "簡報製作", "其他",
+    "文案與內容生成",
+    "資料分析整理",
+    "自動化流程",
+    "圖像生成",
+    "程式開發輔助",
+    "教學設計",
+    "客戶服務",
+    "會議與筆記",
+    "研究資料蒐集",
+    "簡報製作",
+    "其他",
+];
+
+const DIFFICULTY_LEVELS = [
+    { value: "新手可上手", emoji: "🌱", desc: "不需要技術背景，照著操作就能做" },
+    { value: "需要基礎", emoji: "🔧", desc: "有一點 AI 工具使用經驗會更順" },
+    { value: "進階挑戰", emoji: "🚀", desc: "需要一定的技術知識或設定經驗" },
 ];
 
 // 接受的資源檔案副檔名
@@ -54,7 +88,10 @@ type Post = {
     resourceUrl: string;
     resourceJson: string;
     resourceJsonName: string;
+    driveUrl: string;
+    difficulty: string;
     createdAt: any;
+    updatedAt?: any;
     likes: number;
     likedBy: string[];
 };
@@ -86,12 +123,29 @@ export default function ShowcaseFeed() {
     const [resourceUrl, setResourceUrl] = useState("");
     const [resourceJson, setResourceJson] = useState("");
     const [resourceJsonName, setResourceJsonName] = useState("");
+    const [driveUrl, setDriveUrl] = useState("");
+    const [difficulty, setDifficulty] = useState("");
+    const [customScenario, setCustomScenario] = useState("");
 
     const [submitting, setSubmitting] = useState(false);
     const [submitStage, setSubmitStage] = useState<string>("");
     const [toast, setToast] = useState<{ type: "success" | "error"; text: string } | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const jsonInputRef = useRef<HTMLInputElement>(null);
+    const formRef = useRef<HTMLDivElement>(null);
+
+    // 篩選狀態
+    const [filterScenario, setFilterScenario] = useState<string>("");
+    const [filterMine, setFilterMine] = useState(false);
+
+    // 篩選後貼文
+    const filteredPosts = useMemo(() => {
+        return posts.filter((p) => {
+            if (filterMine && p.authorEmail !== user?.email) return false;
+            if (filterScenario && p.scenario !== filterScenario) return false;
+            return true;
+        });
+    }, [posts, filterScenario, filterMine, user?.email]);
 
     // 卡片展開狀態
     const [openDetails, setOpenDetails] = useState<Record<string, boolean>>({});
@@ -99,6 +153,27 @@ export default function ShowcaseFeed() {
     const [commentsByPost, setCommentsByPost] = useState<Record<string, Comment[]>>({});
     const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
     const commentUnsubs = useRef<Record<string, () => void>>({});
+
+    // ===== 編輯貼文狀態 =====
+    const [editingPost, setEditingPost] = useState<Post | null>(null);
+    const [editCaption, setEditCaption] = useState("");
+    const [editTools, setEditTools] = useState<string[]>([]);
+    const [editCustomTools, setEditCustomTools] = useState("");
+    const [editScenario, setEditScenario] = useState("");
+    const [editCustomScenario, setEditCustomScenario] = useState("");
+    const [editImpact, setEditImpact] = useState("");
+    const [editDifficulty, setEditDifficulty] = useState("");
+    const [editPromptText, setEditPromptText] = useState("");
+    const [editKeyLogic, setEditKeyLogic] = useState("");
+    const [editResourceUrl, setEditResourceUrl] = useState("");
+    const [editResourceJson, setEditResourceJson] = useState("");
+    const [editResourceJsonName, setEditResourceJsonName] = useState("");
+    const [editDriveUrl, setEditDriveUrl] = useState("");
+    const [editFile, setEditFile] = useState<File | null>(null);
+    const [editPreviewUrl, setEditPreviewUrl] = useState("");
+    const [editSubmitting, setEditSubmitting] = useState(false);
+    const editFileInputRef = useRef<HTMLInputElement>(null);
+    const editJsonInputRef = useRef<HTMLInputElement>(null);
 
     // 即時讀取貼文
     useEffect(() => {
@@ -255,6 +330,9 @@ export default function ShowcaseFeed() {
         setResourceUrl("");
         setResourceJson("");
         setResourceJsonName("");
+        setDriveUrl("");
+        setDifficulty("");
+        setCustomScenario("");
         if (fileInputRef.current) fileInputRef.current.value = "";
         if (jsonInputRef.current) jsonInputRef.current.value = "";
     };
@@ -266,6 +344,7 @@ export default function ShowcaseFeed() {
         if (!caption.trim()) return showToast("error", "請填寫標題/說明");
         if (tools.length === 0) return showToast("error", "請至少選擇一個 AI 工具");
         if (!scenario) return showToast("error", "請選擇應用場景");
+        if (scenario === "其他" && !customScenario.trim()) return showToast("error", "請填寫自訂場景名稱");
 
         // 處理「其他」工具：把使用者輸入的字串展開成多個自訂工具名
         const customList = customTools
@@ -299,12 +378,14 @@ export default function ShowcaseFeed() {
                 imageUrl: uploaded.secure_url,
                 imagePublicId: uploaded.public_id,
                 tools: finalTools,
-                scenario,
+                scenario: scenario === "其他" ? customScenario.trim() : scenario,
                 impact: impact.trim(),
                 keyLogic: keyLogic.trim(),
                 resourceUrl: resourceUrl.trim(),
                 resourceJson,
                 resourceJsonName,
+                driveUrl: driveUrl.trim(),
+                difficulty,
                 createdAt: serverTimestamp(),
                 likes: 0,
                 likedBy: [],
@@ -378,6 +459,116 @@ export default function ShowcaseFeed() {
         }
     };
 
+    // ===== 編輯貼文函式 =====
+    const openEdit = (post: Post) => {
+        setEditingPost(post);
+        setEditCaption(post.caption || "");
+        setEditTools(post.tools || []);
+        setEditCustomTools("");
+        setEditScenario(post.scenario || "");
+        setEditCustomScenario("");
+        setEditImpact(post.impact || "");
+        setEditDifficulty(post.difficulty || "");
+        setEditPromptText(post.promptText || "");
+        setEditKeyLogic(post.keyLogic || "");
+        setEditResourceUrl(post.resourceUrl || "");
+        setEditResourceJson(post.resourceJson || "");
+        setEditResourceJsonName(post.resourceJsonName || "");
+        setEditDriveUrl(post.driveUrl || "");
+        setEditFile(null);
+        setEditPreviewUrl(post.imageUrl || "");
+    };
+
+    const closeEdit = () => {
+        setEditingPost(null);
+        setEditFile(null);
+        setEditPreviewUrl("");
+        if (editFileInputRef.current) editFileInputRef.current.value = "";
+        if (editJsonInputRef.current) editJsonInputRef.current.value = "";
+    };
+
+    const toggleEditTool = (t: string) => {
+        setEditTools((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
+    };
+
+    const handleEditFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const f = e.target.files?.[0];
+        if (!f) return;
+        if (!f.type.startsWith("image/")) { showToast("error", "請上傳圖片檔"); return; }
+        if (f.size > 10 * 1024 * 1024) { showToast("error", "圖片過大（小於 10 MB）"); return; }
+        setEditFile(f);
+        const reader = new FileReader();
+        reader.onload = (ev) => setEditPreviewUrl(ev.target?.result as string);
+        reader.readAsDataURL(f);
+    };
+
+    const handleEditJsonChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const f = e.target.files?.[0];
+        if (!f) return;
+        const ext = "." + (f.name.split(".").pop() || "").toLowerCase();
+        if (!ALLOWED_RESOURCE_EXT.includes(ext)) { showToast("error", `只接受 ${ALLOWED_RESOURCE_EXT.join(" / ")} 檔案`); return; }
+        if (f.size > 500 * 1024) { showToast("error", "檔案過大（請小於 500 KB）"); return; }
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            const content = ev.target?.result as string;
+            if (ext === ".json") {
+                try { JSON.parse(content); } catch { showToast("error", "JSON 格式有誤"); return; }
+            }
+            setEditResourceJson(content);
+            setEditResourceJsonName(f.name);
+            showToast("success", `已載入 ${f.name}`);
+        };
+        reader.readAsText(f);
+    };
+
+    const handleEditSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!editingPost) return;
+        if (!editCaption.trim()) return showToast("error", "請填寫標題/說明");
+        if (editTools.length === 0) return showToast("error", "請至少選擇一個 AI 工具");
+        if (!editScenario) return showToast("error", "請選擇應用場景");
+        if (editScenario === "其他" && !editCustomScenario.trim()) return showToast("error", "請填寫自訂場景名稱");
+
+        const customList = editCustomTools.split(/[,，、\n]/).map((s) => s.trim()).filter(Boolean);
+        if (editTools.includes("其他") && customList.length === 0) return showToast("error", "勾選「其他」時請填寫工具名稱");
+        const finalTools = Array.from(new Set([...editTools.filter((t) => t !== "其他"), ...customList]));
+
+        setEditSubmitting(true);
+        try {
+            let imageUrl = editingPost.imageUrl;
+            let imagePublicId = editingPost.imagePublicId;
+            if (editFile) {
+                const compressed = await compressImage(editFile);
+                const uploaded = await uploadImageToCloudinary(compressed);
+                imageUrl = uploaded.secure_url;
+                imagePublicId = uploaded.public_id;
+            }
+            await updateDoc(doc(db, "posts", editingPost.id), {
+                caption: editCaption.trim(),
+                tools: finalTools,
+                scenario: editScenario === "其他" ? editCustomScenario.trim() : editScenario,
+                impact: editImpact.trim(),
+                difficulty: editDifficulty,
+                promptText: editPromptText.trim(),
+                keyLogic: editKeyLogic.trim(),
+                resourceUrl: editResourceUrl.trim(),
+                resourceJson: editResourceJson,
+                resourceJsonName: editResourceJsonName,
+                driveUrl: editDriveUrl.trim(),
+                imageUrl,
+                imagePublicId,
+                updatedAt: serverTimestamp(),
+            });
+            showToast("success", "已成功更新！");
+            closeEdit();
+        } catch (err: any) {
+            console.error(err);
+            showToast("error", err.message || "更新失敗");
+        } finally {
+            setEditSubmitting(false);
+        }
+    };
+
     const downloadJson = (content: string, filename: string) => {
         const ext = (filename.split(".").pop() || "").toLowerCase();
         const mime =
@@ -440,7 +631,14 @@ export default function ShowcaseFeed() {
                         看看同事們做了什麼酷東西，互相啟發
                     </p>
                     <button
-                        onClick={() => setShowUpload((s) => !s)}
+                        onClick={() => {
+                            if (!showUpload) {
+                                setShowUpload(true);
+                                setTimeout(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+                            } else {
+                                formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                            }
+                        }}
                         className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl text-white font-black text-sm transition-all active:scale-[0.98]"
                         style={{
                             background: showUpload
@@ -810,6 +1008,7 @@ export default function ShowcaseFeed() {
 
                 {/* ===== 上傳表單 ===== */}
                 {showUpload && (
+                    <div ref={formRef}>
                     <form onSubmit={handleSubmit}
                           className="rounded-3xl p-6 md:p-8 mb-8 space-y-5"
                           style={{
@@ -872,30 +1071,37 @@ export default function ShowcaseFeed() {
                             />
                         </Field>
 
-                        {/* 工具標籤（多選） */}
+                        {/* 工具標籤（多選，依類別分組） */}
                         <Field label="使用的 AI 工具（可複選）" required>
-                            <div className="flex flex-wrap gap-2">
-                                {AI_TOOLS.map((t) => {
-                                    const active = tools.includes(t);
-                                    return (
-                                        <button
-                                            type="button"
-                                            key={t}
-                                            onClick={() => toggleTool(t)}
-                                            className="text-xs font-bold px-3 py-1.5 rounded-full transition-all"
-                                            style={{
-                                                background: active
-                                                    ? "linear-gradient(135deg, #ec4899, #d946ef)"
-                                                    : "rgba(255,255,255,0.85)",
-                                                color: active ? "#fff" : "#475569",
-                                                border: active ? "1px solid rgba(255,255,255,0.3)" : "1px solid rgba(244,182,255,0.4)",
-                                                boxShadow: active ? "0 6px 14px -6px rgba(217,70,239,0.55)" : "none",
-                                            }}
-                                        >
-                                            {t}
-                                        </button>
-                                    );
-                                })}
+                            <div className="space-y-3">
+                                {AI_TOOL_GROUPS.map((grp) => (
+                                    <div key={grp.group}>
+                                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">{grp.group}</p>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {grp.tools.map((t) => {
+                                                const active = tools.includes(t);
+                                                return (
+                                                    <button
+                                                        type="button"
+                                                        key={t}
+                                                        onClick={() => toggleTool(t)}
+                                                        className="text-xs font-bold px-3 py-1.5 rounded-full transition-all"
+                                                        style={{
+                                                            background: active
+                                                                ? "linear-gradient(135deg, #ec4899, #d946ef)"
+                                                                : "rgba(255,255,255,0.85)",
+                                                            color: active ? "#fff" : "#475569",
+                                                            border: active ? "1px solid rgba(255,255,255,0.3)" : "1px solid rgba(244,182,255,0.4)",
+                                                            boxShadow: active ? "0 6px 14px -6px rgba(217,70,239,0.55)" : "none",
+                                                        }}
+                                                    >
+                                                        {t}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
                             {tools.includes("其他") && (
                                 <div className="mt-3 rounded-xl p-3"
@@ -945,6 +1151,24 @@ export default function ShowcaseFeed() {
                                     );
                                 })}
                             </div>
+                            {scenario === "其他" && (
+                                <div className="mt-3 rounded-xl p-3"
+                                     style={{
+                                         background: "linear-gradient(135deg, rgba(236,253,245,0.7), rgba(204,251,241,0.7))",
+                                         border: "1px solid rgba(110,231,183,0.4)",
+                                     }}>
+                                    <label className="text-xs font-black text-emerald-700 uppercase tracking-wider block mb-1.5">
+                                        請填寫自訂場景名稱
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={customScenario}
+                                        onChange={(e) => setCustomScenario(e.target.value)}
+                                        placeholder="例如：財務報表自動化、社群媒體排程..."
+                                        className="w-full px-3 py-2 text-sm bg-white border border-emerald-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400 transition-all"
+                                    />
+                                </div>
+                            )}
                         </Field>
 
                         {/* 成效 */}
@@ -956,6 +1180,37 @@ export default function ShowcaseFeed() {
                                 placeholder="例如：每週節省 5 小時"
                                 className="w-full px-4 py-2.5 bg-white/80 border border-fuchsia-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-fuchsia-400 focus:bg-white transition-all text-sm"
                             />
+                        </Field>
+
+                        {/* 應用難度 */}
+                        <Field label="應用難度（選填）">
+                            <div className="flex flex-wrap gap-2">
+                                {DIFFICULTY_LEVELS.map((d) => {
+                                    const active = difficulty === d.value;
+                                    return (
+                                        <button
+                                            type="button"
+                                            key={d.value}
+                                            onClick={() => setDifficulty(active ? "" : d.value)}
+                                            className="flex items-center gap-2 text-xs font-bold px-3.5 py-2 rounded-xl transition-all text-left"
+                                            style={{
+                                                background: active
+                                                    ? "linear-gradient(135deg, #10b981, #0d9488)"
+                                                    : "rgba(255,255,255,0.85)",
+                                                color: active ? "#fff" : "#475569",
+                                                border: active ? "1px solid rgba(255,255,255,0.3)" : "1px solid rgba(167,243,208,0.45)",
+                                                boxShadow: active ? "0 6px 14px -6px rgba(13,148,136,0.55)" : "none",
+                                            }}
+                                        >
+                                            <span className="text-base leading-none">{d.emoji}</span>
+                                            <div>
+                                                <div className="font-black">{d.value}</div>
+                                                <div className="text-[10px] opacity-70 font-normal">{d.desc}</div>
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
                         </Field>
 
                         {/* Prompt */}
@@ -980,12 +1235,16 @@ export default function ShowcaseFeed() {
                                 <span>🔧</span> 技術實作（選填）
                             </p>
 
-                            <Field label="關鍵邏輯（條列說明流程或邏輯）">
+                            <Field label="設計思維與架構">
+                                <p className="text-[11px] text-slate-500 mb-2 leading-relaxed">
+                                    分享你是怎麼思考這個 AI 工具的設計：遇到什麼問題？如何用 AI 解決？整體流程架構是什麼？<br/>
+                                    <span className="text-slate-400">（格式不限，以下僅供參考）</span>
+                                </p>
                                 <textarea
                                     value={keyLogic}
                                     onChange={(e) => setKeyLogic(e.target.value)}
-                                    placeholder={"例如：\n1. 觸發：每天早上 9 點\n2. 從 Gmail 抓取未讀信件\n3. 用 GPT 分類並摘要\n4. 寫進 Notion 資料庫"}
-                                    rows={5}
+                                    placeholder={"【問題】每週需手動整理 50 封客戶信件，耗時約 3 小時\n【設計思路】用 Gmail 觸發自動抓取，交給 AI 先分類再摘要，最後存進資料庫\n【架構】Gmail → n8n → GPT 分類摘要 → Notion 資料庫"}
+                                    rows={6}
                                     className="w-full px-4 py-2.5 bg-white border border-fuchsia-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-fuchsia-400 transition-all font-mono text-sm"
                                 />
                             </Field>
@@ -1029,6 +1288,19 @@ export default function ShowcaseFeed() {
                                     </div>
                                 </div>
                             </Field>
+
+                            <Field label="雲端硬碟補充連結（選填）">
+                                <p className="text-[11px] text-slate-500 mb-2">
+                                    檔案超過 500 KB 或有其他補充資料？貼上 Google Drive、Dropbox、OneDrive 等雲端連結
+                                </p>
+                                <input
+                                    type="url"
+                                    value={driveUrl}
+                                    onChange={(e) => setDriveUrl(e.target.value)}
+                                    placeholder="https://drive.google.com/..."
+                                    className="w-full px-4 py-2.5 bg-white border border-fuchsia-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-fuchsia-400 transition-all text-sm"
+                                />
+                            </Field>
                         </div>
 
                         {/* 操作按鈕 */}
@@ -1055,6 +1327,75 @@ export default function ShowcaseFeed() {
                             </button>
                         </div>
                     </form>
+                    </div>
+                )}
+
+                {/* ===== 篩選列 ===== */}
+                {!loading && posts.length > 0 && (
+                    <div className="mb-6 space-y-3">
+                        {/* 我的發布成果 */}
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => { setFilterMine((v) => !v); setFilterScenario(""); }}
+                                className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl text-sm font-black transition-all"
+                                style={{
+                                    background: filterMine
+                                        ? "linear-gradient(135deg, #7c3aed, #a855f7)"
+                                        : "rgba(255,255,255,0.85)",
+                                    color: filterMine ? "#fff" : "#475569",
+                                    border: filterMine ? "1px solid rgba(255,255,255,0.3)" : "1px solid rgba(196,181,253,0.5)",
+                                    boxShadow: filterMine ? "0 8px 20px -6px rgba(124,58,237,0.5)" : "none",
+                                }}
+                            >
+                                <span className="text-base leading-none">👤</span>
+                                <span>我的發布成果</span>
+                                {filterMine && (
+                                    <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full"
+                                          style={{background: "rgba(255,255,255,0.25)"}}>
+                                        {filteredPosts.length} 篇
+                                    </span>
+                                )}
+                            </button>
+                            {(filterMine || filterScenario) && (
+                                <button
+                                    onClick={() => { setFilterMine(false); setFilterScenario(""); }}
+                                    className="text-[10px] font-black px-2.5 py-1 rounded-full transition-all"
+                                    style={{background: "rgba(244,182,255,0.3)", color: "#86198f", border: "1px solid rgba(232,121,249,0.35)"}}>
+                                    ✕ 清除篩選
+                                </button>
+                            )}
+                        </div>
+
+                        {/* 場景篩選 */}
+                        {!filterMine && (
+                            <div>
+                                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">🔍 依場景篩選</p>
+                                <div className="flex flex-wrap gap-1.5">
+                                    {stats.scenarioRanking.map(([sc, cnt]) => {
+                                        const active = filterScenario === sc;
+                                        return (
+                                            <button
+                                                key={sc}
+                                                onClick={() => setFilterScenario(active ? "" : sc)}
+                                                className="text-[11px] font-black px-3 py-1.5 rounded-full transition-all inline-flex items-center gap-1.5"
+                                                style={{
+                                                    background: active
+                                                        ? "linear-gradient(135deg, #ec4899, #d946ef)"
+                                                        : "rgba(255,255,255,0.82)",
+                                                    color: active ? "#fff" : "#64748b",
+                                                    border: active ? "1px solid rgba(255,255,255,0.3)" : "1px solid rgba(244,182,255,0.4)",
+                                                    boxShadow: active ? "0 6px 14px -6px rgba(217,70,239,0.55)" : "none",
+                                                }}
+                                            >
+                                                <span>{sc}</span>
+                                                <span className="text-[9px] font-black opacity-70">({cnt})</span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 )}
 
                 {/* ===== 貼文列表 ===== */}
@@ -1078,9 +1419,36 @@ export default function ShowcaseFeed() {
                         <p className="font-black text-slate-800">還沒有任何成果分享</p>
                         <p className="text-sm text-slate-500 mt-1">成為第一個分享的人吧！</p>
                     </div>
+                ) : filteredPosts.length === 0 ? (
+                    <div className="text-center py-12 rounded-3xl"
+                         style={{
+                             background: "rgba(255,255,255,0.72)",
+                             backdropFilter: "blur(20px)",
+                             border: "1px solid rgba(255,255,255,0.95)",
+                         }}>
+                        {filterMine ? (
+                            <>
+                                <p className="text-4xl mb-3">✨</p>
+                                <p className="font-black text-slate-800">你還沒有發布任何成果</p>
+                                <p className="text-sm text-slate-500 mt-1 mb-4">快來分享第一篇，讓同事看看你的 AI 應用！</p>
+                                <button
+                                    onClick={() => { setShowUpload(true); window.scrollTo({top: 0, behavior: "smooth"}); }}
+                                    className="px-5 py-2.5 text-white rounded-xl font-black text-sm"
+                                    style={{background: "linear-gradient(135deg, #ec4899, #d946ef)", boxShadow: "0 8px 20px -6px rgba(217,70,239,0.5)"}}>
+                                    ✨ 立即發表
+                                </button>
+                            </>
+                        ) : (
+                            <>
+                                <p className="text-3xl mb-2">🔍</p>
+                                <p className="font-black text-slate-700">沒有符合「{filterScenario}」的成果</p>
+                                <button onClick={() => setFilterScenario("")} className="mt-3 text-xs font-black text-fuchsia-600 underline">清除篩選</button>
+                            </>
+                        )}
+                    </div>
                 ) : (
                     <div className="space-y-6">
-                        {posts.map((post) => {
+                        {filteredPosts.map((post) => {
                             const isMine = post.authorEmail === user?.email;
                             const liked = !!user?.email && post.likedBy?.includes(user.email);
                             const comments = commentsByPost[post.id] || [];
@@ -1159,22 +1527,38 @@ export default function ShowcaseFeed() {
                                             )}
                                         </div>
 
-                                        {/* 右上：刪除按鈕（只有自己的貼文才有） */}
+                                        {/* 右上：編輯 + 刪除按鈕（只有自己的貼文才有） */}
                                         {isMine && (
-                                            <button
-                                                onClick={() => handleDelete(post)}
-                                                className="absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center text-sm font-black transition-all"
-                                                style={{
-                                                    background: "rgba(255,255,255,0.85)",
-                                                    backdropFilter: "blur(12px)",
-                                                    border: "1px solid rgba(255,255,255,0.95)",
-                                                    color: "#64748b",
-                                                    boxShadow: "0 4px 12px -4px rgba(131,24,67,0.25)",
-                                                }}
-                                                title="刪除"
-                                            >
-                                                ✕
-                                            </button>
+                                            <div className="absolute top-3 right-3 flex gap-1.5">
+                                                <button
+                                                    onClick={() => openEdit(post)}
+                                                    className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-black transition-all"
+                                                    style={{
+                                                        background: "rgba(255,255,255,0.85)",
+                                                        backdropFilter: "blur(12px)",
+                                                        border: "1px solid rgba(255,255,255,0.95)",
+                                                        color: "#7c3aed",
+                                                        boxShadow: "0 4px 12px -4px rgba(131,24,67,0.25)",
+                                                    }}
+                                                    title="編輯"
+                                                >
+                                                    ✏️
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDelete(post)}
+                                                    className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-black transition-all"
+                                                    style={{
+                                                        background: "rgba(255,255,255,0.85)",
+                                                        backdropFilter: "blur(12px)",
+                                                        border: "1px solid rgba(255,255,255,0.95)",
+                                                        color: "#64748b",
+                                                        boxShadow: "0 4px 12px -4px rgba(131,24,67,0.25)",
+                                                    }}
+                                                    title="刪除"
+                                                >
+                                                    ✕
+                                                </button>
+                                            </div>
                                         )}
                                     </div>
 
@@ -1182,11 +1566,16 @@ export default function ShowcaseFeed() {
                                     {post.caption && (
                                         <div className="px-5 pt-4">
                                             <h3 className="text-lg md:text-xl font-black text-slate-900 leading-snug">{post.caption}</h3>
+                                            {post.updatedAt && (
+                                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-400 mt-1">
+                                                    <span>✏️</span> 已編輯 · {formatTime(post.updatedAt)}
+                                                </span>
+                                            )}
                                         </div>
                                     )}
 
-                                    {/* === 標籤雲（場景 + 工具） === */}
-                                    {(post.scenario || (post.tools?.length || 0) > 0) && (
+                                    {/* === 標籤雲（場景 + 工具 + 難度） === */}
+                                    {(post.scenario || (post.tools?.length || 0) > 0 || post.difficulty) && (
                                         <div className="px-5 pt-3 flex flex-wrap items-center gap-1.5">
                                             {post.scenario && (
                                                 <span className="text-[11px] font-black px-2.5 py-1 rounded-full inline-flex items-center gap-1"
@@ -1198,6 +1587,19 @@ export default function ShowcaseFeed() {
                                                     <span>📂</span>{post.scenario}
                                                 </span>
                                             )}
+                                            {post.difficulty && (() => {
+                                                const d = DIFFICULTY_LEVELS.find(d => d.value === post.difficulty);
+                                                return (
+                                                    <span className="text-[11px] font-black px-2.5 py-1 rounded-full inline-flex items-center gap-1"
+                                                          style={{
+                                                              background: "linear-gradient(135deg, rgba(209,250,229,0.95), rgba(204,251,241,0.95))",
+                                                              color: "#065f46",
+                                                              border: "1px solid rgba(110,231,183,0.55)",
+                                                          }}>
+                                                        <span>{d?.emoji || "📊"}</span>{post.difficulty}
+                                                    </span>
+                                                );
+                                            })()}
                                             {post.tools?.slice(0, 5).map((t) => (
                                                 <span key={t} className="text-[11px] font-black px-2.5 py-1 rounded-full"
                                                       style={{
@@ -1330,14 +1732,14 @@ export default function ShowcaseFeed() {
                                                 </div>
                                             )}
 
-                                            {/* 關鍵邏輯 */}
+                                            {/* 設計思維與架構 */}
                                             {post.keyLogic && (
                                                 <div>
                                                     <p className="text-[10px] font-black uppercase tracking-widest mb-2 flex items-center gap-1.5"
                                                        style={{color: "#86198f"}}>
                                                         <span className="w-5 h-5 rounded-md flex items-center justify-center text-white"
                                                               style={{background: "linear-gradient(135deg, #d946ef, #a855f7)"}}>🔧</span>
-                                                        關鍵邏輯
+                                                        設計思維與架構
                                                     </p>
                                                     <pre className="text-xs text-slate-800 rounded-xl p-3.5 whitespace-pre-wrap font-sans leading-relaxed"
                                                          style={{background: "rgba(255,255,255,0.9)", border: "1px solid rgba(232,121,249,0.25)"}}>
@@ -1347,7 +1749,7 @@ export default function ShowcaseFeed() {
                                             )}
 
                                             {/* 資源連結 */}
-                                            {(post.resourceUrl || post.resourceJson) && (
+                                            {(post.resourceUrl || post.resourceJson || post.driveUrl) && (
                                                 <div>
                                                     <p className="text-[10px] font-black uppercase tracking-widest mb-2 flex items-center gap-1.5"
                                                        style={{color: "#86198f"}}>
@@ -1384,6 +1786,21 @@ export default function ShowcaseFeed() {
                                                             >
                                                                 ⬇️ 下載 {post.resourceJsonName || "resource.txt"}
                                                             </button>
+                                                        )}
+                                                        {post.driveUrl && (
+                                                            <a
+                                                                href={post.driveUrl}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="text-xs font-black py-2 px-3 rounded-xl transition-all flex items-center gap-1.5"
+                                                                style={{
+                                                                    background: "linear-gradient(135deg, rgba(219,234,254,0.95), rgba(191,219,254,0.95))",
+                                                                    color: "#1d4ed8",
+                                                                    border: "1px solid rgba(147,197,253,0.6)",
+                                                                }}
+                                                            >
+                                                                ☁️ 雲端硬碟
+                                                            </a>
                                                         )}
                                                     </div>
                                                 </div>
@@ -1440,6 +1857,246 @@ export default function ShowcaseFeed() {
                     </div>
                 )}
             </div>
+
+            {/* ===== 右下角浮動發表按鈕（FAB） ===== */}
+            <button
+                onClick={() => {
+                    if (!showUpload) {
+                        setShowUpload(true);
+                        setTimeout(() => {
+                            formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                        }, 80);
+                    } else {
+                        formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                    }
+                }}
+                className="fixed bottom-6 right-6 z-40 flex items-center gap-2 px-5 py-3.5 rounded-2xl text-white font-black text-sm transition-all active:scale-[0.97]"
+                style={{
+                    background: "linear-gradient(135deg, #ec4899 0%, #d946ef 50%, #a855f7 100%)",
+                    boxShadow: "0 12px 28px -8px rgba(217,70,239,0.65), inset 0 1px 0 rgba(255,255,255,0.3)",
+                }}
+            >
+                <span className="text-base leading-none">✨</span>
+                <span>發表新成果</span>
+            </button>
+
+            {/* ===== 編輯 Modal ===== */}
+            {editingPost && (
+                <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto py-8 px-4"
+                     style={{background: "rgba(15,10,30,0.55)", backdropFilter: "blur(6px)"}}>
+                    <form onSubmit={handleEditSubmit}
+                          className="relative w-full max-w-2xl rounded-3xl p-6 md:p-8 space-y-5 my-auto"
+                          style={{
+                              background: "rgba(255,255,255,0.97)",
+                              boxShadow: "0 32px 64px -16px rgba(131,24,67,0.35), inset 0 1px 0 rgba(255,255,255,0.95)",
+                              border: "1px solid rgba(255,255,255,0.95)",
+                          }}>
+                        {/* 標頭 */}
+                        <div className="flex items-center gap-3 pb-2 mb-2 border-b border-fuchsia-100/60">
+                            <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-lg shrink-0"
+                                 style={{background: "linear-gradient(135deg, #7c3aed 0%, #a855f7 100%)", boxShadow: "0 10px 22px -8px rgba(124,58,237,0.55)"}}>
+                                ✏️
+                            </div>
+                            <div>
+                                <h3 className="text-base md:text-lg font-black text-slate-900">編輯貼文</h3>
+                                <p className="text-[12px] text-slate-500">修改後儲存，貼文會顯示「已編輯」標記</p>
+                            </div>
+                            <button type="button" onClick={closeEdit}
+                                    className="ml-auto w-8 h-8 rounded-full flex items-center justify-center font-black text-slate-400 hover:text-slate-700 transition-all"
+                                    style={{background: "rgba(0,0,0,0.05)"}}>✕</button>
+                        </div>
+
+                        {/* 封面圖 */}
+                        <Field label="封面圖">
+                            <div className="relative group">
+                                <input ref={editFileInputRef} type="file" accept="image/*"
+                                       onChange={handleEditFileChange}
+                                       className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+                                {editPreviewUrl ? (
+                                    <div className="relative">
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img src={editPreviewUrl} alt="預覽" className="w-full max-h-60 object-contain rounded-2xl border-2 border-fuchsia-100"
+                                             style={{background: "linear-gradient(135deg, #fdf2f8, #fae8ff)"}} />
+                                        <div className="absolute inset-0 rounded-2xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all"
+                                             style={{background: "rgba(0,0,0,0.35)"}}>
+                                            <span className="text-white font-black text-sm">點擊更換圖片</span>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="w-full px-4 py-8 rounded-2xl flex flex-col items-center justify-center gap-2 border-2 border-dashed border-fuchsia-200/80"
+                                         style={{background: "rgba(255,255,255,0.5)"}}>
+                                        <span className="text-2xl">📷</span>
+                                        <span className="text-sm font-bold text-slate-500">點擊選擇圖片</span>
+                                    </div>
+                                )}
+                            </div>
+                        </Field>
+
+                        {/* 標題 */}
+                        <Field label="標題/說明" required>
+                            <input type="text" value={editCaption} onChange={(e) => setEditCaption(e.target.value)}
+                                   placeholder="例如：用 n8n 自動整理每週信件摘要"
+                                   className="w-full px-4 py-2.5 bg-white/80 border border-fuchsia-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-fuchsia-400 transition-all text-sm" />
+                        </Field>
+
+                        {/* 工具（分組） */}
+                        <Field label="使用的 AI 工具（可複選）" required>
+                            <div className="space-y-3">
+                                {AI_TOOL_GROUPS.map((grp) => (
+                                    <div key={grp.group}>
+                                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">{grp.group}</p>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {grp.tools.map((t) => {
+                                                const active = editTools.includes(t);
+                                                return (
+                                                    <button type="button" key={t} onClick={() => toggleEditTool(t)}
+                                                            className="text-xs font-bold px-3 py-1.5 rounded-full transition-all"
+                                                            style={{
+                                                                background: active ? "linear-gradient(135deg, #ec4899, #d946ef)" : "rgba(255,255,255,0.85)",
+                                                                color: active ? "#fff" : "#475569",
+                                                                border: active ? "1px solid rgba(255,255,255,0.3)" : "1px solid rgba(244,182,255,0.4)",
+                                                                boxShadow: active ? "0 6px 14px -6px rgba(217,70,239,0.55)" : "none",
+                                                            }}>
+                                                        {t}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            {editTools.includes("其他") && (
+                                <div className="mt-3 rounded-xl p-3" style={{background: "linear-gradient(135deg, rgba(253,232,255,0.7), rgba(252,231,243,0.7))", border: "1px solid rgba(232,121,249,0.35)"}}>
+                                    <label className="text-xs font-black text-fuchsia-700 uppercase tracking-wider block mb-1.5">請填寫工具名稱（多個請用逗號分隔）</label>
+                                    <input type="text" value={editCustomTools} onChange={(e) => setEditCustomTools(e.target.value)}
+                                           placeholder="例如：Perplexity, Notion AI, Suno"
+                                           className="w-full px-3 py-2 text-sm bg-white border border-fuchsia-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-fuchsia-400 transition-all" />
+                                </div>
+                            )}
+                        </Field>
+
+                        {/* 應用場景 */}
+                        <Field label="應用場景" required>
+                            <div className="flex flex-wrap gap-2">
+                                {SCENARIOS.map((s) => {
+                                    const active = editScenario === s;
+                                    return (
+                                        <button type="button" key={s} onClick={() => setEditScenario(s)}
+                                                className="text-xs font-bold px-3 py-1.5 rounded-full transition-all"
+                                                style={{
+                                                    background: active ? "linear-gradient(135deg, #10b981, #0d9488)" : "rgba(255,255,255,0.85)",
+                                                    color: active ? "#fff" : "#475569",
+                                                    border: active ? "1px solid rgba(255,255,255,0.3)" : "1px solid rgba(167,243,208,0.45)",
+                                                    boxShadow: active ? "0 6px 14px -6px rgba(13,148,136,0.55)" : "none",
+                                                }}>
+                                            {s}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                            {editScenario === "其他" && (
+                                <div className="mt-3 rounded-xl p-3" style={{background: "linear-gradient(135deg, rgba(236,253,245,0.7), rgba(204,251,241,0.7))", border: "1px solid rgba(110,231,183,0.4)"}}>
+                                    <label className="text-xs font-black text-emerald-700 uppercase tracking-wider block mb-1.5">請填寫自訂場景名稱</label>
+                                    <input type="text" value={editCustomScenario} onChange={(e) => setEditCustomScenario(e.target.value)}
+                                           placeholder="例如：財務報表自動化、社群媒體排程..."
+                                           className="w-full px-3 py-2 text-sm bg-white border border-emerald-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400 transition-all" />
+                                </div>
+                            )}
+                        </Field>
+
+                        {/* 成效 + 難度 */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <Field label="節省時間 / 成效（選填）">
+                                <input type="text" value={editImpact} onChange={(e) => setEditImpact(e.target.value)}
+                                       placeholder="例如：每週節省 5 小時"
+                                       className="w-full px-4 py-2.5 bg-white/80 border border-fuchsia-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-fuchsia-400 transition-all text-sm" />
+                            </Field>
+                            <Field label="應用難度（選填）">
+                                <div className="flex flex-wrap gap-2">
+                                    {DIFFICULTY_LEVELS.map((d) => {
+                                        const active = editDifficulty === d.value;
+                                        return (
+                                            <button type="button" key={d.value} onClick={() => setEditDifficulty(active ? "" : d.value)}
+                                                    className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl transition-all"
+                                                    style={{
+                                                        background: active ? "linear-gradient(135deg, #10b981, #0d9488)" : "rgba(255,255,255,0.85)",
+                                                        color: active ? "#fff" : "#475569",
+                                                        border: active ? "1px solid rgba(255,255,255,0.3)" : "1px solid rgba(167,243,208,0.45)",
+                                                        boxShadow: active ? "0 6px 14px -6px rgba(13,148,136,0.55)" : "none",
+                                                    }}>
+                                                <span>{d.emoji}</span><span className="font-black">{d.value}</span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </Field>
+                        </div>
+
+                        {/* Prompt */}
+                        <Field label="使用的 Prompt（選填）">
+                            <textarea value={editPromptText} onChange={(e) => setEditPromptText(e.target.value)}
+                                      placeholder="把你用的 Prompt 貼上來，方便大家學習參考"
+                                      rows={3}
+                                      className="w-full px-4 py-2.5 bg-white/80 border border-fuchsia-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-fuchsia-400 transition-all font-mono text-sm" />
+                        </Field>
+
+                        {/* 技術實作 */}
+                        <div className="rounded-2xl p-4 space-y-4"
+                             style={{background: "linear-gradient(135deg, rgba(253,232,255,0.5), rgba(252,231,243,0.5))", border: "1.5px dashed rgba(217,70,239,0.35)"}}>
+                            <p className="text-xs font-black uppercase tracking-widest flex items-center gap-1.5" style={{color: "#9d174d"}}>
+                                <span>🔧</span> 技術實作（選填）
+                            </p>
+                            <Field label="設計思維與架構">
+                                <p className="text-[11px] text-slate-500 mb-2 leading-relaxed">分享你遇到什麼問題、如何設計 AI 解決，以及整體架構。<span className="text-slate-400">（格式不限）</span></p>
+                                <textarea value={editKeyLogic} onChange={(e) => setEditKeyLogic(e.target.value)}
+                                          placeholder={"【問題】...\n【設計思路】...\n【架構】..."}
+                                          rows={5}
+                                          className="w-full px-4 py-2.5 bg-white border border-fuchsia-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-fuchsia-400 transition-all font-mono text-sm" />
+                            </Field>
+                            <Field label="分享 URL（n8n.cloud / GitHub 連結等）">
+                                <input type="url" value={editResourceUrl} onChange={(e) => setEditResourceUrl(e.target.value)}
+                                       placeholder="https://..."
+                                       className="w-full px-4 py-2.5 bg-white border border-fuchsia-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-fuchsia-400 transition-all text-sm" />
+                            </Field>
+                            <Field label="雲端硬碟補充連結（選填）">
+                                <input type="url" value={editDriveUrl} onChange={(e) => setEditDriveUrl(e.target.value)}
+                                       placeholder="https://drive.google.com/..."
+                                       className="w-full px-4 py-2.5 bg-white border border-fuchsia-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-fuchsia-400 transition-all text-sm" />
+                            </Field>
+                            <Field label="上傳專案檔案（500 KB 內）">
+                                <div className="relative group">
+                                    <input ref={editJsonInputRef} type="file"
+                                           accept=".json,.md,.txt,.yaml,.yml,application/json,text/markdown,text/plain,text/yaml,application/x-yaml"
+                                           onChange={handleEditJsonChange}
+                                           className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+                                    <div className={`w-full px-4 py-3 rounded-xl flex items-center justify-center gap-2 text-sm transition-all border-2 border-dashed ${editResourceJsonName ? "border-fuchsia-400 bg-fuchsia-50/70" : "border-fuchsia-200 bg-white group-hover:border-fuchsia-400"}`}>
+                                        <span>{editResourceJsonName ? "📎" : "📄"}</span>
+                                        <span className={`font-bold ${editResourceJsonName ? "text-fuchsia-700" : "text-slate-500"}`}>
+                                            {editResourceJsonName || "點擊選擇檔案（.json / .md / .txt / .yaml / .yml）"}
+                                        </span>
+                                    </div>
+                                </div>
+                            </Field>
+                        </div>
+
+                        {/* 操作按鈕 */}
+                        <div className="flex gap-2 justify-end pt-3 border-t border-fuchsia-100/60">
+                            <button type="button" onClick={closeEdit}
+                                    className="px-4 py-2.5 text-sm font-bold text-slate-500 hover:text-slate-700 rounded-xl transition-all">
+                                取消
+                            </button>
+                            <button type="submit" disabled={editSubmitting}
+                                    className="px-6 py-2.5 text-white rounded-xl font-black text-sm transition-all active:scale-[0.98] disabled:opacity-60 flex items-center gap-2"
+                                    style={{
+                                        background: editSubmitting ? "linear-gradient(135deg, #94a3b8, #64748b)" : "linear-gradient(135deg, #7c3aed 0%, #a855f7 100%)",
+                                        boxShadow: editSubmitting ? "none" : "0 12px 26px -8px rgba(124,58,237,0.55)",
+                                    }}>
+                                {editSubmitting ? (<><span className="animate-spin">↻</span>儲存中...</>) : (<><span>💾</span>儲存更新</>)}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            )}
 
             {/* Toast */}
             {toast && (

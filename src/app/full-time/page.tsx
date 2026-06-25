@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import { db } from "@/lib/firebase";
-import { collection, addDoc, doc, getDoc, serverTimestamp, query, orderBy, where, getDocs } from "firebase/firestore";
+import { collection, addDoc, doc, getDoc, updateDoc, serverTimestamp, query, orderBy, where, getDocs } from "firebase/firestore";
 import { generateMeetingSummary, LM_STUDIO_MODEL } from "@/lib/lmStudio";
 import ShowcaseFeed from "./ShowcaseFeed";
 import LearnHub, { LearnTopic } from "./LearnHub";
@@ -64,7 +64,10 @@ export default function FullTimePage() {
         try {
             const q = query(collection(db, "meetings"), where("createdBy", "==", user?.email), orderBy("createdAt", "desc"));
             const querySnapshot = await getDocs(q);
-            const m = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            // 過濾掉軟刪除的紀錄（有 deletedAt 欄位的）
+            const m = querySnapshot.docs
+                .map(doc => ({ id: doc.id, ...doc.data() }))
+                .filter((m: any) => !m.deletedAt);
             setMeetings(m);
 
             // 同時查詢哪些會議已有 AI 紀錄
@@ -152,6 +155,21 @@ export default function FullTimePage() {
             setMessage({ type: "error", text: "儲存失敗，請稍後再試" });
         } finally {
             setIsSubmitting(false);
+        }
+    };
+
+    const softDeleteMeeting = async (meetingId: string) => {
+        if (!confirm("確定要刪除這筆會議紀錄嗎？\n（記錄將從您的列表移除，但系統仍會保留備份）")) return;
+        try {
+            await updateDoc(doc(db, "meetings", meetingId), {
+                deletedAt: serverTimestamp(),
+                deletedBy: user?.email,
+            });
+            setMeetings(prev => prev.filter(m => m.id !== meetingId));
+            setMessage({ type: "success", text: "已刪除，系統仍保有備份紀錄。" });
+        } catch (err) {
+            console.error(err);
+            setMessage({ type: "error", text: "刪除失敗，請稍後再試。" });
         }
     };
 
@@ -560,6 +578,19 @@ export default function FullTimePage() {
                                                                 </div>
                                                             </div>
                                                             <div className="flex items-center gap-2 shrink-0">
+                                                                {/* 刪除按鈕（軟刪除，Firebase 保留備份） */}
+                                                                <button
+                                                                    onClick={() => softDeleteMeeting(m.id)}
+                                                                    className="w-8 h-8 rounded-xl flex items-center justify-center text-sm transition-all"
+                                                                    style={{
+                                                                        background: "rgba(255,255,255,0.85)",
+                                                                        border: "1px solid rgba(252,165,165,0.5)",
+                                                                        color: "#ef4444",
+                                                                    }}
+                                                                    title="刪除（系統仍保有備份）"
+                                                                >
+                                                                    🗑
+                                                                </button>
                                                                 {hasSummary && (
                                                                     <button
                                                                         onClick={() => fetchSummary(m.id)}
