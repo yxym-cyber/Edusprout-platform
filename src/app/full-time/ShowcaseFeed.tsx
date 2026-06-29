@@ -78,13 +78,21 @@ type Post = {
     authorName: string;
     authorPhoto: string | null;
     caption: string;
+    // 新結構化欄位
+    problem: string;      // ① 想解決的問題
+    workflow: string;     // ② 工具/流程介紹
+    impact: string;       // ③ 具體成果
+    futurePlan: string;   // ④ 後續應用規劃
+    // 舊欄位（向下相容既有貼文）
     promptText: string;
-    imageUrl: string;
+    keyLogic: string;
+    // 圖片（支援多張）
+    imageUrl: string;        // 主圖（backward compat）
     imagePublicId: string;
+    imageUrls: string[];     // 所有圖片
+    imagePublicIds: string[];
     tools: string[];
     scenario: string;
-    impact: string;
-    keyLogic: string;
     resourceUrl: string;
     resourceJson: string;
     resourceJsonName: string;
@@ -111,41 +119,46 @@ export default function ShowcaseFeed() {
 
     // 上傳表單狀態
     const [showUpload, setShowUpload] = useState(false);
-    const [file, setFile] = useState<File | null>(null);
-    const [previewUrl, setPreviewUrl] = useState("");
+    const [files, setFiles] = useState<(File | null)[]>([null, null, null]);
+    const [previewUrls, setPreviewUrls] = useState<string[]>(["", "", ""]);
     const [caption, setCaption] = useState("");
     const [tools, setTools] = useState<string[]>([]);
-    const [customTools, setCustomTools] = useState(""); // 勾選「其他」時填寫，可用逗號分隔多個
+    const [customTools, setCustomTools] = useState("");
     const [scenario, setScenario] = useState("");
-    const [impact, setImpact] = useState("");
-    const [promptText, setPromptText] = useState("");
-    const [keyLogic, setKeyLogic] = useState("");
+    const [problem, setProblem] = useState("");      // ① 問題背景
+    const [workflow, setWorkflow] = useState("");    // ② 工具/流程介紹
+    const [impact, setImpact] = useState("");        // ③ 具體成果
+    const [futurePlan, setFuturePlan] = useState(""); // ④ 後續規劃
     const [resourceUrl, setResourceUrl] = useState("");
     const [resourceJson, setResourceJson] = useState("");
     const [resourceJsonName, setResourceJsonName] = useState("");
     const [driveUrl, setDriveUrl] = useState("");
     const [difficulty, setDifficulty] = useState("");
     const [customScenario, setCustomScenario] = useState("");
+    // 卡片圖片切換
+    const [selectedImg, setSelectedImg] = useState<Record<string, number>>({});
 
     const [submitting, setSubmitting] = useState(false);
     const [submitStage, setSubmitStage] = useState<string>("");
     const [toast, setToast] = useState<{ type: "success" | "error"; text: string } | null>(null);
-    const fileInputRef = useRef<HTMLInputElement>(null);
+    const fileInputRefs = useRef<(HTMLInputElement | null)[]>([null, null, null]);
     const jsonInputRef = useRef<HTMLInputElement>(null);
     const formRef = useRef<HTMLDivElement>(null);
 
     // 篩選狀態
     const [filterScenario, setFilterScenario] = useState<string>("");
     const [filterMine, setFilterMine] = useState(false);
+    const [filterUser, setFilterUser] = useState<string>(""); // 成果人物誌篩選
 
     // 篩選後貼文
     const filteredPosts = useMemo(() => {
         return posts.filter((p) => {
             if (filterMine && p.authorEmail !== user?.email) return false;
+            if (filterUser && p.authorEmail !== filterUser) return false;
             if (filterScenario && p.scenario !== filterScenario) return false;
             return true;
         });
-    }, [posts, filterScenario, filterMine, user?.email]);
+    }, [posts, filterScenario, filterMine, filterUser, user?.email]);
 
     // 卡片展開狀態
     const [openDetails, setOpenDetails] = useState<Record<string, boolean>>({});
@@ -161,10 +174,11 @@ export default function ShowcaseFeed() {
     const [editCustomTools, setEditCustomTools] = useState("");
     const [editScenario, setEditScenario] = useState("");
     const [editCustomScenario, setEditCustomScenario] = useState("");
+    const [editProblem, setEditProblem] = useState("");
+    const [editWorkflow, setEditWorkflow] = useState("");
     const [editImpact, setEditImpact] = useState("");
+    const [editFuturePlan, setEditFuturePlan] = useState("");
     const [editDifficulty, setEditDifficulty] = useState("");
-    const [editPromptText, setEditPromptText] = useState("");
-    const [editKeyLogic, setEditKeyLogic] = useState("");
     const [editResourceUrl, setEditResourceUrl] = useState("");
     const [editResourceJson, setEditResourceJson] = useState("");
     const [editResourceJsonName, setEditResourceJsonName] = useState("");
@@ -269,21 +283,32 @@ export default function ShowcaseFeed() {
         setTools((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
     };
 
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, idx: number) => {
         const f = e.target.files?.[0];
         if (!f) return;
-        if (!f.type.startsWith("image/")) {
-            showToast("error", "請上傳圖片檔");
-            return;
-        }
-        if (f.size > 10 * 1024 * 1024) {
-            showToast("error", "圖片過大（小於 10 MB）");
-            return;
-        }
-        setFile(f);
+        if (!f.type.startsWith("image/")) { showToast("error", "請上傳圖片檔"); return; }
+        if (f.size > 10 * 1024 * 1024) { showToast("error", "圖片過大（小於 10 MB）"); return; }
+        const newFiles = [...files];
+        newFiles[idx] = f;
+        setFiles(newFiles);
         const reader = new FileReader();
-        reader.onload = (ev) => setPreviewUrl(ev.target?.result as string);
+        reader.onload = (ev) => {
+            const newUrls = [...previewUrls];
+            newUrls[idx] = ev.target?.result as string;
+            setPreviewUrls(newUrls);
+        };
         reader.readAsDataURL(f);
+    };
+
+    const removeFile = (idx: number) => {
+        const newFiles = [...files];
+        newFiles[idx] = null;
+        setFiles(newFiles);
+        const newUrls = [...previewUrls];
+        newUrls[idx] = "";
+        setPreviewUrls(newUrls);
+        const ref = fileInputRefs.current[idx];
+        if (ref) ref.value = "";
     };
 
     const handleJsonChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -318,69 +343,70 @@ export default function ShowcaseFeed() {
     };
 
     const resetForm = () => {
-        setFile(null);
-        setPreviewUrl("");
+        setFiles([null, null, null]);
+        setPreviewUrls(["", "", ""]);
         setCaption("");
         setTools([]);
         setCustomTools("");
         setScenario("");
+        setProblem("");
+        setWorkflow("");
         setImpact("");
-        setPromptText("");
-        setKeyLogic("");
+        setFuturePlan("");
         setResourceUrl("");
         setResourceJson("");
         setResourceJsonName("");
         setDriveUrl("");
         setDifficulty("");
         setCustomScenario("");
-        if (fileInputRef.current) fileInputRef.current.value = "";
+        fileInputRefs.current.forEach((ref) => { if (ref) ref.value = ""; });
         if (jsonInputRef.current) jsonInputRef.current.value = "";
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!user) return showToast("error", "請先登入");
-        if (!file) return showToast("error", "請選擇圖片");
+        if (!files[0]) return showToast("error", "請至少選擇一張主圖");
         if (!caption.trim()) return showToast("error", "請填寫標題/說明");
         if (tools.length === 0) return showToast("error", "請至少選擇一個 AI 工具");
         if (!scenario) return showToast("error", "請選擇應用場景");
         if (scenario === "其他" && !customScenario.trim()) return showToast("error", "請填寫自訂場景名稱");
 
-        // 處理「其他」工具：把使用者輸入的字串展開成多個自訂工具名
-        const customList = customTools
-            .split(/[,，、\n]/)
-            .map((s) => s.trim())
-            .filter(Boolean);
-        if (tools.includes("其他") && customList.length === 0) {
-            return showToast("error", "勾選「其他」時請填寫工具名稱");
-        }
-        const finalTools = Array.from(new Set([
-            ...tools.filter((t) => t !== "其他"),
-            ...customList,
-        ]));
-        if (finalTools.length === 0) {
-            return showToast("error", "請至少選擇一個 AI 工具");
-        }
+        const customList = customTools.split(/[,，、\n]/).map((s) => s.trim()).filter(Boolean);
+        if (tools.includes("其他") && customList.length === 0) return showToast("error", "勾選「其他」時請填寫工具名稱");
+        const finalTools = Array.from(new Set([...tools.filter((t) => t !== "其他"), ...customList]));
+        if (finalTools.length === 0) return showToast("error", "請至少選擇一個 AI 工具");
 
         setSubmitting(true);
         try {
-            setSubmitStage("壓縮圖片中...");
-            const compressed = await compressImage(file);
-            setSubmitStage("上傳中...");
-            const uploaded = await uploadImageToCloudinary(compressed);
+            const uploadedUrls: string[] = [];
+            const uploadedIds: string[] = [];
+            for (let i = 0; i < 3; i++) {
+                const f = files[i];
+                if (!f) continue;
+                setSubmitStage(`壓縮圖片 ${uploadedUrls.length + 1}...`);
+                const compressed = await compressImage(f);
+                setSubmitStage(`上傳圖片 ${uploadedUrls.length + 1}...`);
+                const uploaded = await uploadImageToCloudinary(compressed);
+                uploadedUrls.push(uploaded.secure_url);
+                uploadedIds.push(uploaded.public_id);
+            }
             setSubmitStage("儲存中...");
             await addDoc(collection(db, "posts"), {
                 authorEmail: user.email,
                 authorName: user.displayName || user.email,
                 authorPhoto: user.photoURL || null,
                 caption: caption.trim(),
-                promptText: promptText.trim(),
-                imageUrl: uploaded.secure_url,
-                imagePublicId: uploaded.public_id,
+                imageUrl: uploadedUrls[0] || "",
+                imagePublicId: uploadedIds[0] || "",
+                imageUrls: uploadedUrls,
+                imagePublicIds: uploadedIds,
                 tools: finalTools,
                 scenario: scenario === "其他" ? customScenario.trim() : scenario,
+                problem: problem.trim(),
+                workflow: workflow.trim(),
                 impact: impact.trim(),
-                keyLogic: keyLogic.trim(),
+                futurePlan: futurePlan.trim(),
                 resourceUrl: resourceUrl.trim(),
                 resourceJson,
                 resourceJsonName,
@@ -467,16 +493,18 @@ export default function ShowcaseFeed() {
         setEditCustomTools("");
         setEditScenario(post.scenario || "");
         setEditCustomScenario("");
+        setEditProblem(post.problem || "");
+        // 舊貼文若沒有 workflow，把 keyLogic + promptText 合併帶入
+        setEditWorkflow(post.workflow || [post.keyLogic, post.promptText].filter(Boolean).join("\n\n"));
         setEditImpact(post.impact || "");
+        setEditFuturePlan(post.futurePlan || "");
         setEditDifficulty(post.difficulty || "");
-        setEditPromptText(post.promptText || "");
-        setEditKeyLogic(post.keyLogic || "");
         setEditResourceUrl(post.resourceUrl || "");
         setEditResourceJson(post.resourceJson || "");
         setEditResourceJsonName(post.resourceJsonName || "");
         setEditDriveUrl(post.driveUrl || "");
         setEditFile(null);
-        setEditPreviewUrl(post.imageUrl || "");
+        setEditPreviewUrl((post.imageUrls?.[0] || post.imageUrl) || "");
     };
 
     const closeEdit = () => {
@@ -535,28 +563,35 @@ export default function ShowcaseFeed() {
 
         setEditSubmitting(true);
         try {
-            let imageUrl = editingPost.imageUrl;
-            let imagePublicId = editingPost.imagePublicId;
+            let imageUrl = editingPost.imageUrls?.[0] || editingPost.imageUrl;
+            let imagePublicId = editingPost.imagePublicIds?.[0] || editingPost.imagePublicId;
+            let imageUrls = editingPost.imageUrls || [editingPost.imageUrl].filter(Boolean);
+            let imagePublicIds = editingPost.imagePublicIds || [editingPost.imagePublicId].filter(Boolean);
             if (editFile) {
                 const compressed = await compressImage(editFile);
                 const uploaded = await uploadImageToCloudinary(compressed);
                 imageUrl = uploaded.secure_url;
                 imagePublicId = uploaded.public_id;
+                imageUrls = [uploaded.secure_url, ...imageUrls.slice(1)];
+                imagePublicIds = [uploaded.public_id, ...imagePublicIds.slice(1)];
             }
             await updateDoc(doc(db, "posts", editingPost.id), {
                 caption: editCaption.trim(),
                 tools: finalTools,
                 scenario: editScenario === "其他" ? editCustomScenario.trim() : editScenario,
+                problem: editProblem.trim(),
+                workflow: editWorkflow.trim(),
                 impact: editImpact.trim(),
+                futurePlan: editFuturePlan.trim(),
                 difficulty: editDifficulty,
-                promptText: editPromptText.trim(),
-                keyLogic: editKeyLogic.trim(),
                 resourceUrl: editResourceUrl.trim(),
                 resourceJson: editResourceJson,
                 resourceJsonName: editResourceJsonName,
                 driveUrl: editDriveUrl.trim(),
                 imageUrl,
                 imagePublicId,
+                imageUrls,
+                imagePublicIds,
                 updatedAt: serverTimestamp(),
             });
             showToast("success", "已成功更新！");
@@ -636,7 +671,7 @@ export default function ShowcaseFeed() {
                                 setShowUpload(true);
                                 setTimeout(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
                             } else {
-                                formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                                setShowUpload(false);
                             }
                         }}
                         className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl text-white font-black text-sm transition-all active:scale-[0.98]"
@@ -1006,6 +1041,134 @@ export default function ShowcaseFeed() {
                     </section>
                 )}
 
+                {/* ===== 成果人物誌 ===== */}
+                {!loading && stats.userRanking.length > 0 && (
+                    <section className="mb-8">
+                        <div className="rounded-2xl p-5"
+                             style={{
+                                 background: "rgba(255,255,255,0.72)",
+                                 backdropFilter: "blur(20px) saturate(180%)",
+                                 border: "1px solid rgba(255,255,255,0.95)",
+                                 boxShadow: "0 12px 28px -12px rgba(131,24,67,0.14), inset 0 1px 0 rgba(255,255,255,0.95)",
+                             }}>
+                            <div className="flex items-center gap-2 mb-4">
+                                <div className="w-8 h-8 rounded-lg flex items-center justify-center text-sm"
+                                     style={{background: "linear-gradient(135deg, #ec4899, #a855f7)", color: "#fff"}}>🧑‍💼</div>
+                                <h4 className="text-sm font-black text-slate-900">成果人物誌</h4>
+                                <span className="ml-auto text-[10px] font-black text-slate-500 uppercase tracking-wider px-2 py-0.5 rounded-full bg-fuchsia-50 border border-fuchsia-100">
+                                    {stats.uniqueAuthors} 位成員
+                                </span>
+                                {filterUser && (
+                                    <button
+                                        onClick={() => setFilterUser("")}
+                                        className="text-[10px] font-black px-2.5 py-1 rounded-full transition-all"
+                                        style={{background: "rgba(244,182,255,0.3)", color: "#86198f", border: "1px solid rgba(232,121,249,0.35)"}}>
+                                        ✕ 取消篩選
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* 成員頭像列 */}
+                            <div className="flex flex-wrap gap-3">
+                                {stats.userRanking.map((u) => {
+                                    const isActive = filterUser === u.email;
+                                    const isTop = u.email === topSharerEmail;
+                                    const userPostCount = posts.filter(p => p.authorEmail === u.email).length;
+                                    return (
+                                        <button
+                                            key={u.email}
+                                            type="button"
+                                            onClick={() => {
+                                                setFilterUser(isActive ? "" : u.email);
+                                                setFilterMine(false);
+                                                setFilterScenario("");
+                                            }}
+                                            className="flex flex-col items-center gap-1.5 p-3 rounded-2xl transition-all active:scale-95"
+                                            style={{
+                                                background: isActive
+                                                    ? "linear-gradient(135deg, rgba(253,232,255,0.95), rgba(252,231,243,0.95))"
+                                                    : "rgba(255,255,255,0.6)",
+                                                border: isActive
+                                                    ? "1.5px solid rgba(217,70,239,0.5)"
+                                                    : "1px solid rgba(226,232,240,0.8)",
+                                                boxShadow: isActive
+                                                    ? "0 6px 16px -6px rgba(217,70,239,0.35)"
+                                                    : "none",
+                                                minWidth: "64px",
+                                            }}>
+                                            {/* 頭像 */}
+                                            <div className="relative">
+                                                {u.photo ? (
+                                                    /* eslint-disable-next-line @next/next/no-img-element */
+                                                    <img src={u.photo} alt="" className="w-12 h-12 rounded-full"
+                                                         style={{
+                                                             outline: isActive ? "3px solid #d946ef" : "2px solid #e2e8f0",
+                                                             outlineOffset: "1px",
+                                                         }} />
+                                                ) : (
+                                                    <div className="w-12 h-12 rounded-full flex items-center justify-center font-black text-white text-lg"
+                                                         style={{
+                                                             background: isActive
+                                                                 ? "linear-gradient(135deg, #ec4899, #d946ef, #a855f7)"
+                                                                 : "linear-gradient(135deg, #94a3b8, #64748b)",
+                                                             outline: isActive ? "3px solid #d946ef" : "2px solid #e2e8f0",
+                                                             outlineOffset: "1px",
+                                                         }}>
+                                                        {(u.name || "?")[0]}
+                                                    </div>
+                                                )}
+                                                {/* 皇冠 */}
+                                                {isTop && (
+                                                    <span className="absolute -top-2 -left-1 text-sm"
+                                                          style={{filter: "drop-shadow(0 0 4px rgba(252,211,77,0.7))"}}>👑</span>
+                                                )}
+                                                {/* 貼文數 badge */}
+                                                <span className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black text-white"
+                                                      style={{
+                                                          background: isActive
+                                                              ? "linear-gradient(135deg, #ec4899, #d946ef)"
+                                                              : "linear-gradient(135deg, #94a3b8, #64748b)",
+                                                          border: "2px solid #fff",
+                                                      }}>
+                                                    {userPostCount}
+                                                </span>
+                                            </div>
+                                            {/* 名稱 */}
+                                            <p className="text-[10px] font-black text-center leading-tight max-w-[60px] truncate"
+                                               style={{color: isActive ? "#86198f" : "#475569"}}>
+                                                {u.name.split(" ")[0]}
+                                            </p>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+
+                            {/* 篩選中提示 */}
+                            {filterUser && (() => {
+                                const u = stats.userRanking.find(u => u.email === filterUser);
+                                if (!u) return null;
+                                return (
+                                    <div className="mt-4 rounded-xl px-4 py-3 flex items-center gap-3"
+                                         style={{
+                                             background: "linear-gradient(135deg, rgba(253,232,255,0.7), rgba(252,231,243,0.7))",
+                                             border: "1px solid rgba(217,70,239,0.3)",
+                                         }}>
+                                        <span className="text-lg">🔍</span>
+                                        <div>
+                                            <p className="text-xs font-black text-slate-900">
+                                                目前檢視：{u.name} 的成果
+                                            </p>
+                                            <p className="text-[11px] text-slate-500 mt-0.5">
+                                                共 {filteredPosts.length} 篇 · 點「取消篩選」返回全部
+                                            </p>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
+                        </div>
+                    </section>
+                )}
+
                 {/* ===== 上傳表單 ===== */}
                 {showUpload && (
                     <div ref={formRef}>
@@ -1029,39 +1192,50 @@ export default function ShowcaseFeed() {
                             </div>
                         </div>
 
-                        {/* 圖片 */}
-                        <Field label="封面圖" required>
-                            <div className="relative group">
-                                <input
-                                    ref={fileInputRef}
-                                    type="file"
-                                    accept="image/*"
-                                    onChange={handleFileChange}
-                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                                />
-                                {previewUrl ? (
-                                    /* eslint-disable-next-line @next/next/no-img-element */
-                                    <img src={previewUrl} alt="預覽" className="w-full max-h-72 object-contain rounded-2xl border-2 border-fuchsia-100"
-                                         style={{background: "linear-gradient(135deg, #fdf2f8, #fae8ff)"}} />
-                                ) : (
-                                    <div className="w-full px-4 py-10 rounded-2xl flex flex-col items-center justify-center gap-3 transition-all border-2 border-dashed border-fuchsia-200/80 group-hover:border-fuchsia-400 group-hover:bg-fuchsia-50/50"
-                                         style={{background: "rgba(255,255,255,0.5)"}}>
-                                        <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-white text-2xl"
-                                             style={{
-                                                 background: "linear-gradient(135deg, #f0abfc, #e879f9)",
-                                                 boxShadow: "0 10px 22px -8px rgba(217,70,239,0.5)",
-                                             }}>📷</div>
-                                        <div className="text-center">
-                                            <p className="text-sm font-bold text-slate-700">點擊選擇圖片</p>
-                                            <p className="text-[11px] text-slate-500 mt-0.5">最大 10 MB · JPG / PNG / WEBP</p>
-                                        </div>
+                        {/* 圖片（最多3張，自動壓縮） */}
+                        <Field label="封面圖（最多 3 張，自動壓縮畫質）" required>
+                            <div className="grid grid-cols-3 gap-2">
+                                {[0, 1, 2].map((idx) => (
+                                    <div key={idx} className="relative">
+                                        <input
+                                            ref={(el) => { fileInputRefs.current[idx] = el; }}
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={(e) => handleFileChange(e, idx)}
+                                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                        />
+                                        {previewUrls[idx] ? (
+                                            <div className="relative group">
+                                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                <img src={previewUrls[idx]} alt={`預覽 ${idx + 1}`}
+                                                     className="w-full h-28 object-cover rounded-xl border-2 border-fuchsia-200" />
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => { e.stopPropagation(); removeFile(idx); }}
+                                                    className="absolute top-1 right-1 w-5 h-5 rounded-full flex items-center justify-center text-white text-[10px] font-black z-20"
+                                                    style={{background: "rgba(0,0,0,0.55)"}}>✕</button>
+                                                {idx === 0 && (
+                                                    <span className="absolute bottom-1 left-1 text-[9px] font-black px-1.5 py-0.5 rounded text-white"
+                                                          style={{background: "linear-gradient(135deg,#ec4899,#d946ef)"}}>主圖</span>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <div className="w-full h-28 rounded-xl border-2 border-dashed border-fuchsia-200 flex flex-col items-center justify-center gap-1 transition-all hover:border-fuchsia-400 hover:bg-fuchsia-50/40"
+                                                 style={{background: "rgba(255,255,255,0.5)"}}>
+                                                <span className="text-xl">{idx === 0 ? "📷" : "+"}</span>
+                                                <span className="text-[10px] font-bold text-slate-400">
+                                                    {idx === 0 ? "主圖（必填）" : `第 ${idx + 1} 張（選填）`}
+                                                </span>
+                                            </div>
+                                        )}
                                     </div>
-                                )}
+                                ))}
                             </div>
+                            <p className="text-[11px] text-slate-400 mt-1.5">每張最大 10 MB · JPG / PNG / WEBP · 上傳時自動壓縮畫質</p>
                         </Field>
 
                         {/* 標題 */}
-                        <Field label="標題/說明" required>
+                        <Field label="成果標題" required>
                             <input
                                 type="text"
                                 value={caption}
@@ -1171,17 +1345,6 @@ export default function ShowcaseFeed() {
                             )}
                         </Field>
 
-                        {/* 成效 */}
-                        <Field label="節省時間 / 成效（選填）">
-                            <input
-                                type="text"
-                                value={impact}
-                                onChange={(e) => setImpact(e.target.value)}
-                                placeholder="例如：每週節省 5 小時"
-                                className="w-full px-4 py-2.5 bg-white/80 border border-fuchsia-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-fuchsia-400 focus:bg-white transition-all text-sm"
-                            />
-                        </Field>
-
                         {/* 應用難度 */}
                         <Field label="應用難度（選填）">
                             <div className="flex flex-wrap gap-2">
@@ -1213,18 +1376,67 @@ export default function ShowcaseFeed() {
                             </div>
                         </Field>
 
-                        {/* Prompt */}
-                        <Field label="使用的 Prompt（選填）">
-                            <textarea
-                                value={promptText}
-                                onChange={(e) => setPromptText(e.target.value)}
-                                placeholder="把你用的 Prompt 貼上來，方便大家學習參考"
-                                rows={4}
-                                className="w-full px-4 py-2.5 bg-white/80 border border-fuchsia-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-fuchsia-400 focus:bg-white transition-all font-mono text-sm"
-                            />
-                        </Field>
+                        {/* ===== 結構化成果說明 ===== */}
+                        <div className="rounded-2xl p-4 space-y-4"
+                             style={{
+                                 background: "linear-gradient(135deg, rgba(238,242,255,0.6), rgba(253,232,255,0.5))",
+                                 border: "1.5px solid rgba(165,180,252,0.4)",
+                             }}>
+                            <p className="text-xs font-black uppercase tracking-widest flex items-center gap-1.5"
+                               style={{color: "#4338ca"}}>
+                                <span>📋</span> 成果說明
+                            </p>
 
-                        {/* ===== 技術實作 ===== */}
+                            {/* ① 問題陳述與背景 */}
+                            <Field label="① 問題陳述與背景">
+                                <p className="text-[11px] text-slate-500 mb-2">描述導入前的作業痛點或待解決的核心問題</p>
+                                <textarea
+                                    value={problem}
+                                    onChange={(e) => setProblem(e.target.value)}
+                                    placeholder="例如：每週需手動整理 50 封客戶信件，耗時約 3 小時，容易遺漏重要資訊..."
+                                    rows={3}
+                                    className="w-full px-4 py-2.5 bg-white border border-indigo-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-all text-sm"
+                                />
+                            </Field>
+
+                            {/* ② 工具 / 工作流說明 */}
+                            <Field label="② 工具 / 工作流說明">
+                                <p className="text-[11px] text-slate-500 mb-2">說明工具運作方式、操作流程與應用情境，可附 Prompt</p>
+                                <textarea
+                                    value={workflow}
+                                    onChange={(e) => setWorkflow(e.target.value)}
+                                    placeholder={"例如：\n【流程】Gmail 觸發 → n8n 抓取 → GPT 分類摘要 → Notion 資料庫\n【Prompt】請將以下信件分類為「待辦/資訊/廣告」並提取關鍵行動項目..."}
+                                    rows={5}
+                                    className="w-full px-4 py-2.5 bg-white border border-indigo-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-all font-mono text-sm"
+                                />
+                            </Field>
+
+                            {/* ③ 執行成效 */}
+                            <Field label="③ 執行成效">
+                                <p className="text-[11px] text-slate-500 mb-2">以量化指標呈現，如節省時間、效率提升比例、錯誤率降低等</p>
+                                <textarea
+                                    value={impact}
+                                    onChange={(e) => setImpact(e.target.value)}
+                                    placeholder="例如：每週節省 5 小時手動作業，處理速度提升 3 倍，漏信率從 20% 降至 0%"
+                                    rows={3}
+                                    className="w-full px-4 py-2.5 bg-white border border-indigo-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-all text-sm"
+                                />
+                            </Field>
+
+                            {/* ④ 後續推展計畫 */}
+                            <Field label="④ 後續推展計畫">
+                                <p className="text-[11px] text-slate-500 mb-2">說明後續推廣對象、業務範圍或與既有流程的整合計畫</p>
+                                <textarea
+                                    value={futurePlan}
+                                    onChange={(e) => setFuturePlan(e.target.value)}
+                                    placeholder="例如：計劃推廣至客服部門 10 位同仁，並整合進每月報表產出流程..."
+                                    rows={3}
+                                    className="w-full px-4 py-2.5 bg-white border border-indigo-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-all text-sm"
+                                />
+                            </Field>
+                        </div>
+
+                        {/* ===== 資源分享 ===== */}
                         <div className="rounded-2xl p-4 space-y-4"
                              style={{
                                  background: "linear-gradient(135deg, rgba(253,232,255,0.5), rgba(252,231,243,0.5))",
@@ -1232,22 +1444,8 @@ export default function ShowcaseFeed() {
                              }}>
                             <p className="text-xs font-black uppercase tracking-widest flex items-center gap-1.5"
                                style={{color: "#9d174d"}}>
-                                <span>🔧</span> 技術實作（選填）
+                                <span>📦</span> 資源分享（選填）
                             </p>
-
-                            <Field label="設計思維與架構">
-                                <p className="text-[11px] text-slate-500 mb-2 leading-relaxed">
-                                    分享你是怎麼思考這個 AI 工具的設計：遇到什麼問題？如何用 AI 解決？整體流程架構是什麼？<br/>
-                                    <span className="text-slate-400">（格式不限，以下僅供參考）</span>
-                                </p>
-                                <textarea
-                                    value={keyLogic}
-                                    onChange={(e) => setKeyLogic(e.target.value)}
-                                    placeholder={"【問題】每週需手動整理 50 封客戶信件，耗時約 3 小時\n【設計思路】用 Gmail 觸發自動抓取，交給 AI 先分類再摘要，最後存進資料庫\n【架構】Gmail → n8n → GPT 分類摘要 → Notion 資料庫"}
-                                    rows={6}
-                                    className="w-full px-4 py-2.5 bg-white border border-fuchsia-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-fuchsia-400 transition-all font-mono text-sm"
-                                />
-                            </Field>
 
                             <Field label="分享 URL（n8n.cloud / GitHub 連結等）">
                                 <input
@@ -1261,7 +1459,7 @@ export default function ShowcaseFeed() {
 
                             <Field label="上傳專案檔案（500 KB 內）">
                                 <p className="text-xs text-slate-600 mb-2 leading-relaxed">
-                                    接受純文字檔：<b>.json</b>（n8n / Make / Zapier workflow）、<b>.md</b>（Claude 系統提示、文件）、<b>.txt</b>（純文字 prompt）、<b>.yaml</b> / <b>.yml</b>（設定檔）
+                                    接受：<b>.json</b>（n8n / Make / Zapier workflow）、<b>.md</b>（系統提示、文件）、<b>.txt</b>（prompt）、<b>.yaml / .yml</b>（設定檔）
                                 </p>
                                 <div className="rounded-xl p-3 mb-2 text-xs flex items-start gap-2"
                                      style={{
@@ -1269,8 +1467,12 @@ export default function ShowcaseFeed() {
                                          border: "1px solid rgba(251,191,36,0.4)",
                                          color: "#92400e",
                                      }}>
-                                    <span className="text-base leading-none">⚠️</span>
-                                    <span><b>上傳前請務必移除</b>檔案內所有 API Key、Webhook URL、密碼、Token 等私密資訊，避免外流。</span>
+                                    <span className="text-base leading-none shrink-0">⚠️</span>
+                                    <span>
+                                        <b>上傳前請確認：</b><br/>
+                                        1. 移除所有 API Key、Webhook URL、密碼、Token 等私密資訊<br/>
+                                        2. <b>檔案可以讓人直接匯入工具實際試跑</b>，而非截圖或說明文件
+                                    </span>
                                 </div>
                                 <div className="relative group">
                                     <input
@@ -1290,8 +1492,8 @@ export default function ShowcaseFeed() {
                             </Field>
 
                             <Field label="雲端硬碟補充連結（選填）">
-                                <p className="text-[11px] text-slate-500 mb-2">
-                                    檔案超過 500 KB 或有其他補充資料？貼上 Google Drive、Dropbox、OneDrive 等雲端連結
+                                <p className="text-[11px] text-slate-500 mb-1.5">
+                                    檔案超過 500 KB？貼上 Google Drive / Dropbox / OneDrive 連結，<b>請確認他人可直接開啟並下載試用</b>
                                 </p>
                                 <input
                                     type="url"
@@ -1356,9 +1558,9 @@ export default function ShowcaseFeed() {
                                     </span>
                                 )}
                             </button>
-                            {(filterMine || filterScenario) && (
+                            {(filterMine || filterScenario || filterUser) && (
                                 <button
-                                    onClick={() => { setFilterMine(false); setFilterScenario(""); }}
+                                    onClick={() => { setFilterMine(false); setFilterScenario(""); setFilterUser(""); }}
                                     className="text-[10px] font-black px-2.5 py-1 rounded-full transition-all"
                                     style={{background: "rgba(244,182,255,0.3)", color: "#86198f", border: "1px solid rgba(232,121,249,0.35)"}}>
                                     ✕ 清除篩選
@@ -1452,9 +1654,11 @@ export default function ShowcaseFeed() {
                             const isMine = post.authorEmail === user?.email;
                             const liked = !!user?.email && post.likedBy?.includes(user.email);
                             const comments = commentsByPost[post.id] || [];
-                            const hasDetail = !!(post.promptText || post.keyLogic || post.resourceUrl || post.resourceJson);
+                            const hasDetail = !!(post.problem || post.workflow || post.keyLogic || post.promptText || post.resourceUrl || post.resourceJson || post.futurePlan);
                             const detailOpen = !!openDetails[post.id];
                             const isTopSharer = post.authorEmail === topSharerEmail;
+                            const postImages = (post.imageUrls?.length ? post.imageUrls : [post.imageUrl]).filter(Boolean);
+                            const currentImgIdx = selectedImg[post.id] ?? 0;
 
                             return (
                                 <article key={post.id}
@@ -1465,11 +1669,52 @@ export default function ShowcaseFeed() {
                                              border: isTopSharer ? "1.5px solid rgba(252,211,77,0.45)" : "1px solid rgba(255,255,255,0.95)",
                                              boxShadow: "0 16px 36px -14px rgba(131,24,67,0.15), inset 0 1px 0 rgba(255,255,255,0.95)",
                                          }}>
-                                    {/* === 大圖（最上方）+ 浮動作者徽章 + 浮動編號 === */}
+                                    {/* === 圖片區（支援多張切換）=== */}
                                     <div className="relative overflow-hidden">
                                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                                        <img src={post.imageUrl} alt={post.caption} className="w-full"
+                                        <img src={postImages[currentImgIdx] || postImages[0]} alt={post.caption} className="w-full"
                                              style={{background: "linear-gradient(135deg, #fdf2f8, #fae8ff)"}} />
+                                        {/* 多圖切換：左右箭頭 + 圓點 */}
+                                        {postImages.length > 1 && (
+                                            <>
+                                                {/* 左箭頭 */}
+                                                {currentImgIdx > 0 && (
+                                                    <button type="button"
+                                                            onClick={() => setSelectedImg(p => ({...p, [post.id]: currentImgIdx - 1}))}
+                                                            className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center font-black text-sm transition-all active:scale-90"
+                                                            style={{background: "rgba(255,255,255,0.88)", boxShadow: "0 2px 8px rgba(0,0,0,0.18)", color: "#374151"}}>
+                                                        ‹
+                                                    </button>
+                                                )}
+                                                {/* 右箭頭 */}
+                                                {currentImgIdx < postImages.length - 1 && (
+                                                    <button type="button"
+                                                            onClick={() => setSelectedImg(p => ({...p, [post.id]: currentImgIdx + 1}))}
+                                                            className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center font-black text-sm transition-all active:scale-90"
+                                                            style={{background: "rgba(255,255,255,0.88)", boxShadow: "0 2px 8px rgba(0,0,0,0.18)", color: "#374151"}}>
+                                                        ›
+                                                    </button>
+                                                )}
+                                                {/* 圓點指示器 */}
+                                                <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex gap-1.5">
+                                                    {postImages.map((_, i) => (
+                                                        <button key={i} type="button"
+                                                                onClick={() => setSelectedImg(p => ({...p, [post.id]: i}))}
+                                                                className="rounded-full transition-all"
+                                                                style={{
+                                                                    width: i === currentImgIdx ? "16px" : "6px",
+                                                                    height: "6px",
+                                                                    background: i === currentImgIdx ? "#fff" : "rgba(255,255,255,0.5)",
+                                                                }} />
+                                                    ))}
+                                                </div>
+                                                {/* 張數標示 */}
+                                                <div className="absolute top-2.5 right-2.5 text-[10px] font-black px-2 py-0.5 rounded-full"
+                                                     style={{background: "rgba(0,0,0,0.45)", color: "#fff"}}>
+                                                    {currentImgIdx + 1} / {postImages.length}
+                                                </div>
+                                            </>
+                                        )}
 
                                         {/* 漸層遮罩，讓徽章看起來更立體 */}
                                         <div className="absolute inset-x-0 top-0 h-20 pointer-events-none"
@@ -1618,6 +1863,29 @@ export default function ShowcaseFeed() {
                                         </div>
                                     )}
 
+                                    {/* === 結構化摘要（4大欄位預覽）=== */}
+                                    {(post.problem || post.workflow || post.keyLogic || post.promptText || post.impact || post.futurePlan) && (
+                                        <div className="px-5 pt-3 space-y-2">
+                                            {[
+                                                { icon: "🎯", label: "問題陳述", content: post.problem, color: "#4338ca" },
+                                                { icon: "⚙️", label: "工具 / 工作流", content: post.workflow || [post.keyLogic, post.promptText].filter(Boolean).join("  "), color: "#0d9488" },
+                                                { icon: "📈", label: "執行成效", content: post.impact, color: "#9d174d" },
+                                                { icon: "🚀", label: "後續推展", content: post.futurePlan, color: "#b45309" },
+                                            ].filter((s) => s.content?.trim()).map((section) => (
+                                                <div key={section.label} className="rounded-xl px-3 py-2.5"
+                                                     style={{background: "rgba(255,255,255,0.7)", border: "1px solid rgba(226,232,240,0.8)"}}>
+                                                    <p className="text-[10px] font-black uppercase tracking-widest mb-1 flex items-center gap-1"
+                                                       style={{color: section.color}}>
+                                                        <span>{section.icon}</span>{section.label}
+                                                    </p>
+                                                    <p className="text-xs text-slate-700 leading-relaxed line-clamp-2">
+                                                        {section.content}
+                                                    </p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
                                     {/* === Mini Stats Bar：互動數字一覽 === */}
                                     <div className="px-5 pt-3 flex items-center gap-3 text-[11px] font-bold text-slate-500">
                                         <span className="inline-flex items-center gap-1">
@@ -1694,56 +1962,67 @@ export default function ShowcaseFeed() {
                                     </div>
 
                                     {/* ===== 詳情展開區 ===== */}
-                                    {detailOpen && hasDetail && (
+                                    {detailOpen && hasDetail && (() => {
+                                        const legacyWorkflow = [post.keyLogic, post.promptText].filter(Boolean).join("\n\n");
+                                        const displayWorkflow = post.workflow || legacyWorkflow;
+                                        return (
                                         <div className="px-5 py-5 space-y-4"
                                              style={{
-                                                 background: "linear-gradient(135deg, rgba(253,232,255,0.45), rgba(243,232,255,0.45))",
-                                                 borderTop: "1px solid rgba(232,121,249,0.25)",
+                                                 background: "linear-gradient(135deg, rgba(238,242,255,0.4), rgba(253,232,255,0.4))",
+                                                 borderTop: "1px solid rgba(165,180,252,0.3)",
                                              }}>
-                                            {/* Prompt */}
-                                            {post.promptText && (
+                                            {/* ① 問題背景 */}
+                                            {post.problem && (
                                                 <div>
-                                                    <div className="flex items-center justify-between mb-2">
-                                                        <span className="text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5"
-                                                              style={{color: "#86198f"}}>
-                                                            <span className="w-5 h-5 rounded-md flex items-center justify-center text-white"
-                                                                  style={{background: "linear-gradient(135deg, #ec4899, #d946ef)"}}>💡</span>
-                                                            使用的 Prompt
-                                                        </span>
-                                                        <button
-                                                            onClick={() => {
-                                                                navigator.clipboard.writeText(post.promptText);
-                                                                showToast("success", "Prompt 已複製");
-                                                            }}
-                                                            className="text-[11px] font-black py-1 px-2.5 rounded-lg transition-all"
-                                                            style={{
-                                                                background: "rgba(255,255,255,0.95)",
-                                                                color: "#86198f",
-                                                                border: "1px solid rgba(232,121,249,0.45)",
-                                                            }}
-                                                        >
-                                                            📋 一鍵複製
-                                                        </button>
-                                                    </div>
-                                                    <pre className="text-xs text-slate-800 rounded-xl p-3.5 whitespace-pre-wrap font-mono leading-relaxed max-h-60 overflow-auto"
-                                                         style={{background: "rgba(255,255,255,0.9)", border: "1px solid rgba(232,121,249,0.25)"}}>
-{post.promptText}
+                                                    <p className="text-[10px] font-black uppercase tracking-widest mb-2 flex items-center gap-1.5"
+                                                       style={{color: "#4338ca"}}>
+                                                        <span className="w-5 h-5 rounded-md flex items-center justify-center text-white text-[11px]"
+                                                              style={{background: "linear-gradient(135deg, #6366f1, #8b5cf6)"}}>🎯</span>
+                                                        ① 問題陳述與背景
+                                                    </p>
+                                                    <pre className="text-xs text-slate-800 rounded-xl p-3.5 whitespace-pre-wrap font-sans leading-relaxed"
+                                                         style={{background: "rgba(255,255,255,0.9)", border: "1px solid rgba(165,180,252,0.3)"}}>
+{post.problem}
                                                     </pre>
                                                 </div>
                                             )}
 
-                                            {/* 設計思維與架構 */}
-                                            {post.keyLogic && (
+                                            {/* ② 工具/流程介紹（含舊 keyLogic + promptText） */}
+                                            {displayWorkflow && (
+                                                <div>
+                                                    <div className="flex items-center justify-between mb-2">
+                                                        <p className="text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5"
+                                                           style={{color: "#0d9488"}}>
+                                                            <span className="w-5 h-5 rounded-md flex items-center justify-center text-white text-[11px]"
+                                                                  style={{background: "linear-gradient(135deg, #0d9488, #0891b2)"}}>⚙️</span>
+                                                            ② 工具 / 工作流說明
+                                                        </p>
+                                                        <button
+                                                            onClick={() => { navigator.clipboard.writeText(displayWorkflow); showToast("success", "已複製"); }}
+                                                            className="text-[11px] font-black py-1 px-2.5 rounded-lg transition-all"
+                                                            style={{background: "rgba(255,255,255,0.95)", color: "#0d9488", border: "1px solid rgba(110,231,183,0.5)"}}>
+                                                            📋 一鍵複製
+                                                        </button>
+                                                    </div>
+                                                    <pre className="text-xs text-slate-800 rounded-xl p-3.5 whitespace-pre-wrap font-mono leading-relaxed max-h-60 overflow-auto"
+                                                         style={{background: "rgba(255,255,255,0.9)", border: "1px solid rgba(110,231,183,0.3)"}}>
+{displayWorkflow}
+                                                    </pre>
+                                                </div>
+                                            )}
+
+                                            {/* ④ 後續應用規劃 */}
+                                            {post.futurePlan && (
                                                 <div>
                                                     <p className="text-[10px] font-black uppercase tracking-widest mb-2 flex items-center gap-1.5"
-                                                       style={{color: "#86198f"}}>
-                                                        <span className="w-5 h-5 rounded-md flex items-center justify-center text-white"
-                                                              style={{background: "linear-gradient(135deg, #d946ef, #a855f7)"}}>🔧</span>
-                                                        設計思維與架構
+                                                       style={{color: "#b45309"}}>
+                                                        <span className="w-5 h-5 rounded-md flex items-center justify-center text-white text-[11px]"
+                                                              style={{background: "linear-gradient(135deg, #f59e0b, #ef4444)"}}>🚀</span>
+                                                        ④ 後續推展計畫
                                                     </p>
                                                     <pre className="text-xs text-slate-800 rounded-xl p-3.5 whitespace-pre-wrap font-sans leading-relaxed"
-                                                         style={{background: "rgba(255,255,255,0.9)", border: "1px solid rgba(232,121,249,0.25)"}}>
-{post.keyLogic}
+                                                         style={{background: "rgba(255,255,255,0.9)", border: "1px solid rgba(251,191,36,0.3)"}}>
+{post.futurePlan}
                                                     </pre>
                                                 </div>
                                             )}
@@ -1755,50 +2034,27 @@ export default function ShowcaseFeed() {
                                                        style={{color: "#86198f"}}>
                                                         <span className="w-5 h-5 rounded-md flex items-center justify-center text-white"
                                                               style={{background: "linear-gradient(135deg, #a855f7, #7c3aed)"}}>📦</span>
-                                                        資源
+                                                        資源下載
                                                     </p>
                                                     <div className="flex flex-wrap gap-2">
                                                         {post.resourceUrl && (
-                                                            <a
-                                                                href={post.resourceUrl}
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
-                                                                className="text-xs font-black py-2 px-3 rounded-xl transition-all flex items-center gap-1.5"
-                                                                style={{
-                                                                    background: "rgba(255,255,255,0.95)",
-                                                                    color: "#86198f",
-                                                                    border: "1px solid rgba(232,121,249,0.45)",
-                                                                }}
-                                                            >
+                                                            <a href={post.resourceUrl} target="_blank" rel="noopener noreferrer"
+                                                               className="text-xs font-black py-2 px-3 rounded-xl flex items-center gap-1.5"
+                                                               style={{background: "rgba(255,255,255,0.95)", color: "#86198f", border: "1px solid rgba(232,121,249,0.45)"}}>
                                                                 🔗 開啟連結
                                                             </a>
                                                         )}
                                                         {post.resourceJson && (
-                                                            <button
-                                                                onClick={() => downloadJson(post.resourceJson, post.resourceJsonName)}
-                                                                className="text-xs font-black py-2 px-3 rounded-xl transition-all flex items-center gap-1.5"
-                                                                style={{
-                                                                    background: "linear-gradient(135deg, #ec4899, #d946ef)",
-                                                                    color: "#fff",
-                                                                    border: "1px solid rgba(255,255,255,0.3)",
-                                                                    boxShadow: "0 6px 14px -6px rgba(217,70,239,0.5)",
-                                                                }}
-                                                            >
+                                                            <button onClick={() => downloadJson(post.resourceJson, post.resourceJsonName)}
+                                                                    className="text-xs font-black py-2 px-3 rounded-xl flex items-center gap-1.5"
+                                                                    style={{background: "linear-gradient(135deg, #ec4899, #d946ef)", color: "#fff", border: "1px solid rgba(255,255,255,0.3)", boxShadow: "0 6px 14px -6px rgba(217,70,239,0.5)"}}>
                                                                 ⬇️ 下載 {post.resourceJsonName || "resource.txt"}
                                                             </button>
                                                         )}
                                                         {post.driveUrl && (
-                                                            <a
-                                                                href={post.driveUrl}
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
-                                                                className="text-xs font-black py-2 px-3 rounded-xl transition-all flex items-center gap-1.5"
-                                                                style={{
-                                                                    background: "linear-gradient(135deg, rgba(219,234,254,0.95), rgba(191,219,254,0.95))",
-                                                                    color: "#1d4ed8",
-                                                                    border: "1px solid rgba(147,197,253,0.6)",
-                                                                }}
-                                                            >
+                                                            <a href={post.driveUrl} target="_blank" rel="noopener noreferrer"
+                                                               className="text-xs font-black py-2 px-3 rounded-xl flex items-center gap-1.5"
+                                                               style={{background: "linear-gradient(135deg, rgba(219,234,254,0.95), rgba(191,219,254,0.95))", color: "#1d4ed8", border: "1px solid rgba(147,197,253,0.6)"}}>
                                                                 ☁️ 雲端硬碟
                                                             </a>
                                                         )}
@@ -1806,7 +2062,8 @@ export default function ShowcaseFeed() {
                                                 </div>
                                             )}
                                         </div>
-                                    )}
+                                        );
+                                    })()}
 
                                     {/* ===== 留言區 ===== */}
                                     {openComments[post.id] && (
@@ -1867,17 +2124,22 @@ export default function ShowcaseFeed() {
                             formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
                         }, 80);
                     } else {
-                        formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                        setShowUpload(false);
+                        window.scrollTo({ top: 0, behavior: "smooth" });
                     }
                 }}
                 className="fixed bottom-6 right-6 z-40 flex items-center gap-2 px-5 py-3.5 rounded-2xl text-white font-black text-sm transition-all active:scale-[0.97]"
                 style={{
-                    background: "linear-gradient(135deg, #ec4899 0%, #d946ef 50%, #a855f7 100%)",
-                    boxShadow: "0 12px 28px -8px rgba(217,70,239,0.65), inset 0 1px 0 rgba(255,255,255,0.3)",
+                    background: showUpload
+                        ? "linear-gradient(135deg, #94a3b8, #64748b)"
+                        : "linear-gradient(135deg, #ec4899 0%, #d946ef 50%, #a855f7 100%)",
+                    boxShadow: showUpload
+                        ? "0 12px 28px -8px rgba(100,116,139,0.5)"
+                        : "0 12px 28px -8px rgba(217,70,239,0.65), inset 0 1px 0 rgba(255,255,255,0.3)",
                 }}
             >
-                <span className="text-base leading-none">✨</span>
-                <span>發表新成果</span>
+                <span className="text-base leading-none">{showUpload ? "✕" : "✨"}</span>
+                <span>{showUpload ? "收起表單" : "發表新成果"}</span>
             </button>
 
             {/* ===== 編輯 Modal ===== */}
@@ -2004,66 +2266,82 @@ export default function ShowcaseFeed() {
                             )}
                         </Field>
 
-                        {/* 成效 + 難度 */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <Field label="節省時間 / 成效（選填）">
-                                <input type="text" value={editImpact} onChange={(e) => setEditImpact(e.target.value)}
-                                       placeholder="例如：每週節省 5 小時"
-                                       className="w-full px-4 py-2.5 bg-white/80 border border-fuchsia-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-fuchsia-400 transition-all text-sm" />
+                        {/* 應用難度 */}
+                        <Field label="應用難度（選填）">
+                            <div className="flex flex-wrap gap-2">
+                                {DIFFICULTY_LEVELS.map((d) => {
+                                    const active = editDifficulty === d.value;
+                                    return (
+                                        <button type="button" key={d.value} onClick={() => setEditDifficulty(active ? "" : d.value)}
+                                                className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl transition-all"
+                                                style={{
+                                                    background: active ? "linear-gradient(135deg, #10b981, #0d9488)" : "rgba(255,255,255,0.85)",
+                                                    color: active ? "#fff" : "#475569",
+                                                    border: active ? "1px solid rgba(255,255,255,0.3)" : "1px solid rgba(167,243,208,0.45)",
+                                                    boxShadow: active ? "0 6px 14px -6px rgba(13,148,136,0.55)" : "none",
+                                                }}>
+                                            <span>{d.emoji}</span><span className="font-black">{d.value}</span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </Field>
+
+                        {/* ===== 結構化成果說明 ===== */}
+                        <div className="rounded-2xl p-4 space-y-4"
+                             style={{background: "linear-gradient(135deg, rgba(238,242,255,0.6), rgba(253,232,255,0.5))", border: "1.5px solid rgba(165,180,252,0.4)"}}>
+                            <p className="text-xs font-black uppercase tracking-widest flex items-center gap-1.5" style={{color: "#4338ca"}}>
+                                <span>📋</span> 成果說明
+                            </p>
+                            <Field label="① 問題陳述與背景">
+                                <textarea value={editProblem} onChange={(e) => setEditProblem(e.target.value)}
+                                          placeholder="描述導入前的作業痛點或待解決的核心問題..."
+                                          rows={2}
+                                          className="w-full px-4 py-2.5 bg-white border border-indigo-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-all text-sm" />
                             </Field>
-                            <Field label="應用難度（選填）">
-                                <div className="flex flex-wrap gap-2">
-                                    {DIFFICULTY_LEVELS.map((d) => {
-                                        const active = editDifficulty === d.value;
-                                        return (
-                                            <button type="button" key={d.value} onClick={() => setEditDifficulty(active ? "" : d.value)}
-                                                    className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl transition-all"
-                                                    style={{
-                                                        background: active ? "linear-gradient(135deg, #10b981, #0d9488)" : "rgba(255,255,255,0.85)",
-                                                        color: active ? "#fff" : "#475569",
-                                                        border: active ? "1px solid rgba(255,255,255,0.3)" : "1px solid rgba(167,243,208,0.45)",
-                                                        boxShadow: active ? "0 6px 14px -6px rgba(13,148,136,0.55)" : "none",
-                                                    }}>
-                                                <span>{d.emoji}</span><span className="font-black">{d.value}</span>
-                                            </button>
-                                        );
-                                    })}
-                                </div>
+                            <Field label="② 工具 / 工作流說明">
+                                <textarea value={editWorkflow} onChange={(e) => setEditWorkflow(e.target.value)}
+                                          placeholder={"工具運作方式、操作流程、應用情境，可附 Prompt..."}
+                                          rows={4}
+                                          className="w-full px-4 py-2.5 bg-white border border-indigo-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-all font-mono text-sm" />
+                            </Field>
+                            <Field label="③ 執行成效">
+                                <textarea value={editImpact} onChange={(e) => setEditImpact(e.target.value)}
+                                          placeholder="量化指標：節省時間、效率提升比例、錯誤率降低等..."
+                                          rows={2}
+                                          className="w-full px-4 py-2.5 bg-white border border-indigo-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-all text-sm" />
+                            </Field>
+                            <Field label="④ 後續推展計畫">
+                                <textarea value={editFuturePlan} onChange={(e) => setEditFuturePlan(e.target.value)}
+                                          placeholder="後續推廣對象、業務範圍或與既有流程的整合計畫..."
+                                          rows={2}
+                                          className="w-full px-4 py-2.5 bg-white border border-indigo-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-all text-sm" />
                             </Field>
                         </div>
 
-                        {/* Prompt */}
-                        <Field label="使用的 Prompt（選填）">
-                            <textarea value={editPromptText} onChange={(e) => setEditPromptText(e.target.value)}
-                                      placeholder="把你用的 Prompt 貼上來，方便大家學習參考"
-                                      rows={3}
-                                      className="w-full px-4 py-2.5 bg-white/80 border border-fuchsia-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-fuchsia-400 transition-all font-mono text-sm" />
-                        </Field>
-
-                        {/* 技術實作 */}
+                        {/* ===== 資源分享 ===== */}
                         <div className="rounded-2xl p-4 space-y-4"
                              style={{background: "linear-gradient(135deg, rgba(253,232,255,0.5), rgba(252,231,243,0.5))", border: "1.5px dashed rgba(217,70,239,0.35)"}}>
                             <p className="text-xs font-black uppercase tracking-widest flex items-center gap-1.5" style={{color: "#9d174d"}}>
-                                <span>🔧</span> 技術實作（選填）
+                                <span>📦</span> 資源分享（選填）
                             </p>
-                            <Field label="設計思維與架構">
-                                <p className="text-[11px] text-slate-500 mb-2 leading-relaxed">分享你遇到什麼問題、如何設計 AI 解決，以及整體架構。<span className="text-slate-400">（格式不限）</span></p>
-                                <textarea value={editKeyLogic} onChange={(e) => setEditKeyLogic(e.target.value)}
-                                          placeholder={"【問題】...\n【設計思路】...\n【架構】..."}
-                                          rows={5}
-                                          className="w-full px-4 py-2.5 bg-white border border-fuchsia-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-fuchsia-400 transition-all font-mono text-sm" />
-                            </Field>
                             <Field label="分享 URL（n8n.cloud / GitHub 連結等）">
                                 <input type="url" value={editResourceUrl} onChange={(e) => setEditResourceUrl(e.target.value)}
                                        placeholder="https://..."
                                        className="w-full px-4 py-2.5 bg-white border border-fuchsia-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-fuchsia-400 transition-all text-sm" />
                             </Field>
                             <Field label="雲端硬碟補充連結（選填）">
+                                <p className="text-[11px] text-slate-500 mb-1.5">請確認他人可直接開啟並下載試用</p>
                                 <input type="url" value={editDriveUrl} onChange={(e) => setEditDriveUrl(e.target.value)}
                                        placeholder="https://drive.google.com/..."
                                        className="w-full px-4 py-2.5 bg-white border border-fuchsia-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-fuchsia-400 transition-all text-sm" />
                             </Field>
                             <Field label="上傳專案檔案（500 KB 內）">
+                                <div className="rounded-xl p-2.5 mb-2 text-[11px] flex items-start gap-1.5"
+                                     style={{background: "rgba(254,243,199,0.7)", border: "1px solid rgba(251,191,36,0.35)", color: "#92400e"}}>
+                                    <span>⚠️</span>
+                                    <span>移除私密資訊後，請確認檔案可直接匯入工具試跑</span>
+                                </div>
                                 <div className="relative group">
                                     <input ref={editJsonInputRef} type="file"
                                            accept=".json,.md,.txt,.yaml,.yml,application/json,text/markdown,text/plain,text/yaml,application/x-yaml"
