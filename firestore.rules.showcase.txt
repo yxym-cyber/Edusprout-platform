@@ -37,13 +37,15 @@ match /posts/{postId} {
     && request.resource.data.likes == 0
     && request.resource.data.likedBy.size() == 0;
 
-  // 更新：只允許「按讚」相關欄位變動，或作者/admin 改自己的內文
+  // 更新：只允許「按讚」相關欄位變動，或作者/admin 修改內文
   allow update: if isWhitelisted() && (
-    // 案例 A：只更新 likes / likedBy
+    // 案例 A：只更新 likes / likedBy（任何白名單成員都能按讚）
     (request.resource.data.diff(resource.data).affectedKeys()
         .hasOnly(['likes', 'likedBy']))
-    // 案例 B：作者或 admin 編輯自己的文
-    || (isAuthor(resource.data) || isAdmin())
+    // 案例 B：作者本人可編輯自己的貼文
+    || isAuthor(resource.data)
+    // 案例 C：admin 可修改所有人的貼文（含資料遷移、內容管理）
+    || isAdmin()
   );
 
   // 刪除：只有作者或 admin

@@ -83,6 +83,7 @@ type Post = {
     workflow: string;     // ② 工具/流程介紹
     impact: string;       // ③ 具體成果
     futurePlan: string;   // ④ 後續應用規劃
+    prompt: string;       // 資源分享：Prompt
     // 舊欄位（向下相容既有貼文）
     promptText: string;
     keyLogic: string;
@@ -129,6 +130,7 @@ export default function ShowcaseFeed() {
     const [workflow, setWorkflow] = useState("");    // ② 工具/流程介紹
     const [impact, setImpact] = useState("");        // ③ 具體成果
     const [futurePlan, setFuturePlan] = useState(""); // ④ 後續規劃
+    const [prompt, setPrompt] = useState("");          // 資源分享：Prompt
     const [resourceUrl, setResourceUrl] = useState("");
     const [resourceJson, setResourceJson] = useState("");
     const [resourceJsonName, setResourceJsonName] = useState("");
@@ -178,6 +180,7 @@ export default function ShowcaseFeed() {
     const [editWorkflow, setEditWorkflow] = useState("");
     const [editImpact, setEditImpact] = useState("");
     const [editFuturePlan, setEditFuturePlan] = useState("");
+    const [editPrompt, setEditPrompt] = useState("");
     const [editDifficulty, setEditDifficulty] = useState("");
     const [editResourceUrl, setEditResourceUrl] = useState("");
     const [editResourceJson, setEditResourceJson] = useState("");
@@ -267,6 +270,38 @@ export default function ShowcaseFeed() {
     // 取得最踴躍使用者的 email（用來顯示皇冠）
     const topSharerEmail = stats.topUser?.email;
 
+    // 一次性遷移：promptText → prompt
+    const runMigration = async () => {
+        if (!confirm("將所有舊貼文的 promptText 搬移到 prompt 欄位，確定執行？")) return;
+        let updated = 0;
+        for (const post of posts) {
+            const hasOld = post.promptText && post.promptText.trim();
+            const hasNew = post.prompt && post.prompt.trim();
+            if (hasOld && !hasNew) {
+                await updateDoc(doc(db, "posts", post.id), { prompt: post.promptText.trim() });
+                updated++;
+            }
+        }
+        showToast("success", `遷移完成，共更新 ${updated} 筆`);
+    };
+
+    // 一次性清理：把 workflow 裡混入的 prompt 內容截掉
+    const runWorkflowCleanup = async () => {
+        const MARKER = "【最高優先原則";
+        if (!confirm("將所有貼文 workflow 欄位中「【最高優先原則」之後的內容截除，確定執行？")) return;
+        let updated = 0;
+        for (const post of posts) {
+            const w = post.workflow || "";
+            const idx = w.indexOf(MARKER);
+            if (idx !== -1) {
+                const cleaned = w.slice(0, idx).trimEnd();
+                await updateDoc(doc(db, "posts", post.id), { workflow: cleaned });
+                updated++;
+            }
+        }
+        showToast("success", `清理完成，共更新 ${updated} 筆`);
+    };
+
     useEffect(() => {
         return () => {
             Object.values(commentUnsubs.current).forEach((u) => u());
@@ -353,6 +388,7 @@ export default function ShowcaseFeed() {
         setWorkflow("");
         setImpact("");
         setFuturePlan("");
+        setPrompt("");
         setResourceUrl("");
         setResourceJson("");
         setResourceJsonName("");
@@ -407,6 +443,7 @@ export default function ShowcaseFeed() {
                 workflow: workflow.trim(),
                 impact: impact.trim(),
                 futurePlan: futurePlan.trim(),
+                prompt: prompt.trim(),
                 resourceUrl: resourceUrl.trim(),
                 resourceJson,
                 resourceJsonName,
@@ -498,6 +535,7 @@ export default function ShowcaseFeed() {
         setEditWorkflow(post.workflow || [post.keyLogic, post.promptText].filter(Boolean).join("\n\n"));
         setEditImpact(post.impact || "");
         setEditFuturePlan(post.futurePlan || "");
+        setEditPrompt(post.prompt || "");
         setEditDifficulty(post.difficulty || "");
         setEditResourceUrl(post.resourceUrl || "");
         setEditResourceJson(post.resourceJson || "");
@@ -583,6 +621,7 @@ export default function ShowcaseFeed() {
                 workflow: editWorkflow.trim(),
                 impact: editImpact.trim(),
                 futurePlan: editFuturePlan.trim(),
+                prompt: editPrompt.trim(),
                 difficulty: editDifficulty,
                 resourceUrl: editResourceUrl.trim(),
                 resourceJson: editResourceJson,
@@ -687,6 +726,26 @@ export default function ShowcaseFeed() {
                         <span className="text-lg leading-none">{showUpload ? "✕" : "✨"}</span>
                         <span>{showUpload ? "收起發表表單" : "發表新成果"}</span>
                     </button>
+
+                    {/* 管理員工具列（僅自己看得到） */}
+                    {user?.email === "yxymian@gmail.com" && (
+                        <div className="mt-3 flex gap-2 justify-center">
+                            <button
+                                onClick={runMigration}
+                                className="text-xs px-3 py-1.5 rounded-lg opacity-40 hover:opacity-80 transition-opacity"
+                                style={{background: "rgba(0,0,0,0.08)", color: "#64748b"}}
+                            >
+                                🔧 遷移舊 promptText 資料
+                            </button>
+                            <button
+                                onClick={runWorkflowCleanup}
+                                className="text-xs px-3 py-1.5 rounded-lg opacity-40 hover:opacity-80 transition-opacity"
+                                style={{background: "rgba(0,0,0,0.08)", color: "#64748b"}}
+                            >
+                                ✂️ 清理 workflow 混入的 prompt
+                            </button>
+                        </div>
+                    )}
                 </header>
 
                 {/* ===== 儀表板（最顯眼的英雄區塊）===== */}
@@ -1457,6 +1516,16 @@ export default function ShowcaseFeed() {
                                 />
                             </Field>
 
+                            <Field label="Prompt 分享（選填）">
+                                <textarea
+                                    rows={4}
+                                    value={prompt}
+                                    onChange={(e) => setPrompt(e.target.value)}
+                                    placeholder="貼上你使用的 Prompt，讓同事可以直接複製試用..."
+                                    className="w-full px-4 py-2.5 bg-white border border-fuchsia-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-fuchsia-400 transition-all text-sm resize-none"
+                                />
+                            </Field>
+
                             <Field label="上傳專案檔案（500 KB 內）">
                                 <p className="text-xs text-slate-600 mb-2 leading-relaxed">
                                     接受：<b>.json</b>（n8n / Make / Zapier workflow）、<b>.md</b>（系統提示、文件）、<b>.txt</b>（prompt）、<b>.yaml / .yml</b>（設定檔）
@@ -1654,7 +1723,7 @@ export default function ShowcaseFeed() {
                             const isMine = post.authorEmail === user?.email;
                             const liked = !!user?.email && post.likedBy?.includes(user.email);
                             const comments = commentsByPost[post.id] || [];
-                            const hasDetail = !!(post.problem || post.workflow || post.keyLogic || post.promptText || post.resourceUrl || post.resourceJson || post.futurePlan);
+                            const hasDetail = !!(post.problem || post.workflow || post.keyLogic || post.promptText || post.resourceUrl || post.resourceJson || post.futurePlan || post.impact);
                             const detailOpen = !!openDetails[post.id];
                             const isTopSharer = post.authorEmail === topSharerEmail;
                             const postImages = (post.imageUrls?.length ? post.imageUrls : [post.imageUrl]).filter(Boolean);
@@ -1772,10 +1841,10 @@ export default function ShowcaseFeed() {
                                             )}
                                         </div>
 
-                                        {/* 右上：編輯 + 刪除按鈕（只有自己的貼文才有） */}
-                                        {isMine && (
+                                        {/* 右上：編輯 + 刪除按鈕 */}
+                                        {(isMine || user?.email === "yxymian@gmail.com") && (
                                             <div className="absolute top-3 right-3 flex gap-1.5">
-                                                <button
+                                                {isMine && <button
                                                     onClick={() => openEdit(post)}
                                                     className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-black transition-all"
                                                     style={{
@@ -1788,7 +1857,7 @@ export default function ShowcaseFeed() {
                                                     title="編輯"
                                                 >
                                                     ✏️
-                                                </button>
+                                                </button>}
                                                 <button
                                                     onClick={() => handleDelete(post)}
                                                     className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-black transition-all"
@@ -1863,29 +1932,6 @@ export default function ShowcaseFeed() {
                                         </div>
                                     )}
 
-                                    {/* === 結構化摘要（4大欄位預覽）=== */}
-                                    {(post.problem || post.workflow || post.keyLogic || post.promptText || post.impact || post.futurePlan) && (
-                                        <div className="px-5 pt-3 space-y-2">
-                                            {[
-                                                { icon: "🎯", label: "問題陳述", content: post.problem, color: "#4338ca" },
-                                                { icon: "⚙️", label: "工具 / 工作流", content: post.workflow || [post.keyLogic, post.promptText].filter(Boolean).join("  "), color: "#0d9488" },
-                                                { icon: "📈", label: "執行成效", content: post.impact, color: "#9d174d" },
-                                                { icon: "🚀", label: "後續推展", content: post.futurePlan, color: "#b45309" },
-                                            ].filter((s) => s.content?.trim()).map((section) => (
-                                                <div key={section.label} className="rounded-xl px-3 py-2.5"
-                                                     style={{background: "rgba(255,255,255,0.7)", border: "1px solid rgba(226,232,240,0.8)"}}>
-                                                    <p className="text-[10px] font-black uppercase tracking-widest mb-1 flex items-center gap-1"
-                                                       style={{color: section.color}}>
-                                                        <span>{section.icon}</span>{section.label}
-                                                    </p>
-                                                    <p className="text-xs text-slate-700 leading-relaxed line-clamp-2">
-                                                        {section.content}
-                                                    </p>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-
                                     {/* === Mini Stats Bar：互動數字一覽 === */}
                                     <div className="px-5 pt-3 flex items-center gap-3 text-[11px] font-bold text-slate-500">
                                         <span className="inline-flex items-center gap-1">
@@ -1956,7 +2002,7 @@ export default function ShowcaseFeed() {
                                                 }}
                                             >
                                                 <span>{detailOpen ? "▲" : "▼"}</span>
-                                                {detailOpen ? "收起詳情" : "查看實作"}
+                                                {detailOpen ? "收起" : "查看詳細成果內容"}
                                             </button>
                                         )}
                                     </div>
@@ -1973,56 +2019,100 @@ export default function ShowcaseFeed() {
                                              }}>
                                             {/* ① 問題背景 */}
                                             {post.problem && (
-                                                <div>
-                                                    <p className="text-[10px] font-black uppercase tracking-widest mb-2 flex items-center gap-1.5"
-                                                       style={{color: "#4338ca"}}>
-                                                        <span className="w-5 h-5 rounded-md flex items-center justify-center text-white text-[11px]"
-                                                              style={{background: "linear-gradient(135deg, #6366f1, #8b5cf6)"}}>🎯</span>
-                                                        ① 問題陳述與背景
-                                                    </p>
-                                                    <pre className="text-xs text-slate-800 rounded-xl p-3.5 whitespace-pre-wrap font-sans leading-relaxed"
-                                                         style={{background: "rgba(255,255,255,0.9)", border: "1px solid rgba(165,180,252,0.3)"}}>
+                                                <div className="flex rounded-xl overflow-hidden"
+                                                     style={{background: "rgba(255,255,255,0.92)", border: "0.5px solid rgba(203,213,225,0.6)"}}>
+                                                    <div style={{width: "4px", flexShrink: 0, background: "#2563eb"}} />
+                                                    <div className="flex-1 p-3.5">
+                                                        <p className="text-[10px] font-black uppercase tracking-widest mb-2 flex items-center gap-1.5"
+                                                           style={{color: "#1e40af"}}>
+                                                            <span className="w-5 h-5 rounded-md flex items-center justify-center text-white text-[11px]"
+                                                                  style={{background: "#2563eb"}}>①</span>
+                                                            問題陳述與背景
+                                                        </p>
+                                                        <pre className="text-xs text-slate-700 whitespace-pre-wrap font-sans leading-relaxed">
 {post.problem}
-                                                    </pre>
+                                                        </pre>
+                                                    </div>
                                                 </div>
                                             )}
 
                                             {/* ② 工具/流程介紹（含舊 keyLogic + promptText） */}
                                             {displayWorkflow && (
+                                                <div className="flex rounded-xl overflow-hidden"
+                                                     style={{background: "rgba(255,255,255,0.92)", border: "0.5px solid rgba(203,213,225,0.6)"}}>
+                                                    <div style={{width: "4px", flexShrink: 0, background: "#7c3aed"}} />
+                                                    <div className="flex-1 p-3.5">
+                                                        <p className="text-[10px] font-black uppercase tracking-widest mb-2 flex items-center gap-1.5"
+                                                           style={{color: "#5b21b6"}}>
+                                                            <span className="w-5 h-5 rounded-md flex items-center justify-center text-white text-[11px]"
+                                                                  style={{background: "#7c3aed"}}>②</span>
+                                                            工具 / 工作流說明
+                                                        </p>
+                                                        <pre className="text-xs text-slate-700 whitespace-pre-wrap font-mono leading-relaxed max-h-60 overflow-auto">
+{displayWorkflow}
+                                                        </pre>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* ③ 執行成效 */}
+                                            {post.impact && (
+                                                <div className="flex rounded-xl overflow-hidden"
+                                                     style={{background: "rgba(255,255,255,0.92)", border: "0.5px solid rgba(203,213,225,0.6)"}}>
+                                                    <div style={{width: "4px", flexShrink: 0, background: "#a855f7"}} />
+                                                    <div className="flex-1 p-3.5">
+                                                        <p className="text-[10px] font-black uppercase tracking-widest mb-2 flex items-center gap-1.5"
+                                                           style={{color: "#7e22ce"}}>
+                                                            <span className="w-5 h-5 rounded-md flex items-center justify-center text-white text-[11px]"
+                                                                  style={{background: "#a855f7"}}>③</span>
+                                                            執行成效
+                                                        </p>
+                                                        <pre className="text-xs text-slate-700 whitespace-pre-wrap font-sans leading-relaxed">
+{post.impact}
+                                                        </pre>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* ④ 後續推展計畫 */}
+                                            {post.futurePlan && (
+                                                <div className="flex rounded-xl overflow-hidden"
+                                                     style={{background: "rgba(255,255,255,0.92)", border: "0.5px solid rgba(203,213,225,0.6)"}}>
+                                                    <div style={{width: "4px", flexShrink: 0, background: "#ec4899"}} />
+                                                    <div className="flex-1 p-3.5">
+                                                        <p className="text-[10px] font-black uppercase tracking-widest mb-2 flex items-center gap-1.5"
+                                                           style={{color: "#9d174d"}}>
+                                                            <span className="w-5 h-5 rounded-md flex items-center justify-center text-white text-[11px]"
+                                                                  style={{background: "#ec4899"}}>④</span>
+                                                            後續推展計畫
+                                                        </p>
+                                                        <pre className="text-xs text-slate-700 whitespace-pre-wrap font-sans leading-relaxed">
+{post.futurePlan}
+                                                        </pre>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Prompt 分享 */}
+                                            {post.prompt && (
                                                 <div>
                                                     <div className="flex items-center justify-between mb-2">
                                                         <p className="text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5"
-                                                           style={{color: "#0d9488"}}>
+                                                           style={{color: "#7c3aed"}}>
                                                             <span className="w-5 h-5 rounded-md flex items-center justify-center text-white text-[11px]"
-                                                                  style={{background: "linear-gradient(135deg, #0d9488, #0891b2)"}}>⚙️</span>
-                                                            ② 工具 / 工作流說明
+                                                                  style={{background: "linear-gradient(135deg, #7c3aed, #a855f7)"}}>✏️</span>
+                                                            Prompt 分享
                                                         </p>
                                                         <button
-                                                            onClick={() => { navigator.clipboard.writeText(displayWorkflow); showToast("success", "已複製"); }}
+                                                            onClick={() => { navigator.clipboard.writeText(post.prompt); showToast("success", "已複製"); }}
                                                             className="text-[11px] font-black py-1 px-2.5 rounded-lg transition-all"
-                                                            style={{background: "rgba(255,255,255,0.95)", color: "#0d9488", border: "1px solid rgba(110,231,183,0.5)"}}>
+                                                            style={{background: "rgba(255,255,255,0.95)", color: "#7c3aed", border: "1px solid rgba(167,139,250,0.5)"}}>
                                                             📋 一鍵複製
                                                         </button>
                                                     </div>
                                                     <pre className="text-xs text-slate-800 rounded-xl p-3.5 whitespace-pre-wrap font-mono leading-relaxed max-h-60 overflow-auto"
-                                                         style={{background: "rgba(255,255,255,0.9)", border: "1px solid rgba(110,231,183,0.3)"}}>
-{displayWorkflow}
-                                                    </pre>
-                                                </div>
-                                            )}
-
-                                            {/* ④ 後續應用規劃 */}
-                                            {post.futurePlan && (
-                                                <div>
-                                                    <p className="text-[10px] font-black uppercase tracking-widest mb-2 flex items-center gap-1.5"
-                                                       style={{color: "#b45309"}}>
-                                                        <span className="w-5 h-5 rounded-md flex items-center justify-center text-white text-[11px]"
-                                                              style={{background: "linear-gradient(135deg, #f59e0b, #ef4444)"}}>🚀</span>
-                                                        ④ 後續推展計畫
-                                                    </p>
-                                                    <pre className="text-xs text-slate-800 rounded-xl p-3.5 whitespace-pre-wrap font-sans leading-relaxed"
-                                                         style={{background: "rgba(255,255,255,0.9)", border: "1px solid rgba(251,191,36,0.3)"}}>
-{post.futurePlan}
+                                                         style={{background: "rgba(255,255,255,0.9)", border: "1px solid rgba(167,139,250,0.3)"}}>
+{post.prompt}
                                                     </pre>
                                                 </div>
                                             )}
@@ -2329,6 +2419,15 @@ export default function ShowcaseFeed() {
                                 <input type="url" value={editResourceUrl} onChange={(e) => setEditResourceUrl(e.target.value)}
                                        placeholder="https://..."
                                        className="w-full px-4 py-2.5 bg-white border border-fuchsia-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-fuchsia-400 transition-all text-sm" />
+                            </Field>
+                            <Field label="Prompt 分享（選填）">
+                                <textarea
+                                    rows={4}
+                                    value={editPrompt}
+                                    onChange={(e) => setEditPrompt(e.target.value)}
+                                    placeholder="貼上你使用的 Prompt，讓同事可以直接複製試用..."
+                                    className="w-full px-4 py-2.5 bg-white border border-fuchsia-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-fuchsia-400 transition-all text-sm resize-none"
+                                />
                             </Field>
                             <Field label="雲端硬碟補充連結（選填）">
                                 <p className="text-[11px] text-slate-500 mb-1.5">請確認他人可直接開啟並下載試用</p>
