@@ -522,6 +522,16 @@ export default function ShowcaseFeed() {
         }
     };
 
+    const deleteComment = async (postId: string, commentId: string) => {
+        if (!confirm("確定刪除這則留言？")) return;
+        try {
+            await deleteDoc(doc(db, "posts", postId, "comments", commentId));
+        } catch (err) {
+            console.error(err);
+            showToast("error", "刪除留言失敗");
+        }
+    };
+
     // ===== 編輯貼文函式 =====
     const openEdit = (post: Post) => {
         setEditingPost(post);
@@ -2171,6 +2181,14 @@ export default function ShowcaseFeed() {
                                                         <div className="flex items-baseline gap-2">
                                                             <span className="font-black text-slate-900 text-sm">{c.authorName}</span>
                                                             <span className="text-[10px] text-slate-400">{formatTime(c.createdAt)}</span>
+                                                            {c.authorEmail === user?.email && (
+                                                                <button
+                                                                    onClick={() => deleteComment(post.id, c.id)}
+                                                                    className="ml-auto text-[10px] text-slate-400 hover:text-rose-500 transition-colors font-bold"
+                                                                >
+                                                                    刪除
+                                                                </button>
+                                                            )}
                                                         </div>
                                                         <p className="text-sm text-slate-700 leading-relaxed mt-0.5">{c.text}</p>
                                                     </div>
